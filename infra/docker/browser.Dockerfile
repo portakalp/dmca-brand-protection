@@ -10,7 +10,7 @@
 
 FROM ghcr.io/astral-sh/uv:0.12.24 AS uv
 
-FROM mcr.microsoft.com/playwright/python:v1.63.0-noble AS builder
+FROM mcr.microsoft.com/playwright/python:v1.64.1-noble AS builder
 COPY --from=uv /uv /uvx /bin/
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -24,7 +24,7 @@ COPY backend/src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-default-groups --group browser --no-editable
 
-FROM mcr.microsoft.com/playwright/python:v1.63.0-noble AS runtime
+FROM mcr.microsoft.com/playwright/python:v1.64.1-noble AS runtime
 # Non-root pwuser (the image's user) with the uid and gid of the backend image's kalkan user, so
 # worker-browser and worker-default share files on the artifacts-tmp volume, whose mount point
 # both images own (a fresh named volume takes its owner from the image).
