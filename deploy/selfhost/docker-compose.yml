@@ -84,7 +84,7 @@ services:
   # Jobs only (state lives in Postgres). Users kalkan (application) and browser (worker-browser,
   # limited to its queues): redis/start.sh renders the ACL file from the two passwords.
   redis:
-    image: redis:7.4.11-bookworm
+    image: redis:7.4.12-bookworm
     restart: unless-stopped
     logging: *logging
     entrypoint: ["bash", "/opt/kalkan/redis-start.sh"]
