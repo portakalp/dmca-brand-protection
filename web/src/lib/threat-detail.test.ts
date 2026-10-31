@@ -3,10 +3,16 @@ import { describe, expect, it } from "vitest";
 import type { Schemas } from "./api/client";
 import {
   capturedText,
+  countryName,
   noticeRows,
   noticesCaption,
+  percent,
+  ruleOutcome,
   sameDay,
   shortOrg,
+  siteCheck,
+  sourceFact,
+  takedownProgress,
   timelineSteps,
   zoneName,
 } from "./threat-detail";
@@ -124,7 +130,7 @@ describe("threat detail", () => {
     expect(steps[1].text).toBe(
       "Desktop and mobile screenshots, page source and network log saved.",
     );
-    expect(steps[2].text).toBe("Classified as a phishing clone with 0.97 confidence.");
+    expect(steps[2].text).toBe("Classified as a phishing clone with 97% confidence.");
     expect(steps[4].text).toBe(
       "Cloudflare disclosed the origin host, and its abuse desk was emailed.",
     );
@@ -155,9 +161,9 @@ describe("threat detail", () => {
   it("lists the notices and the scheduled escalation", () => {
     const rows = noticeRows(detail(), ZONE);
     expect(rows.map((row) => [row.title, row.subtitle, row.status])).toEqual([
-      ["Cloudflare abuse report", "Phishing form · Oct 8, 09:40", "Received"],
+      ["Cloudflare", "Phishing form · Oct 8, 09:40", "Acknowledged"],
       ["Hetzner Online abuse desk", "Email · Oct 8, 10:05", "Awaiting reply"],
-      ["Registry of .com", "Escalation · Oct 10, 10:05", "Scheduled"],
+      ["Registry of .com", "Escalation · Oct 10, 10:05, only if still online", "Scheduled"],
     ]);
     expect(noticesCaption(rows, detail())).toBe("2 sent · 1 scheduled");
   });
@@ -169,5 +175,57 @@ describe("threat detail", () => {
     expect(sameDay(["2026-10-08T07:14:00Z", "2026-10-08T21:59:00Z"], ZONE)).toBe(true);
     expect(sameDay(["2026-10-08T07:14:00Z", "2026-10-08T22:01:00Z"], ZONE)).toBe(false);
     expect(capturedText([])).toBe("The page was captured.");
+  });
+
+  it("words the header, the review and percentages", () => {
+    expect(percent(0.97)).toBe("97%");
+    expect(percent(0.954)).toBe("95%");
+    expect(countryName("DE")).toBe("Germany");
+    expect(sourceFact("ct")).toEqual({ label: "Found in", value: "certificate logs (CT)" });
+    expect(sourceFact(null)).toBeNull();
+    expect(ruleOutcome(detail())).toBe("Approved automatically");
+    expect(ruleOutcome(detail({ ai_review: { reviews: [], rule: null } }))).toBe("Pending");
+  });
+
+  it("runs the takedown clock from the first report to the escalation", () => {
+    const now = new Date("2026-10-08T12:35:00Z"); // 14:35 in Warsaw, 4h 55m after 09:40
+    const progress = takedownProgress(detail(), now);
+    expect(progress).toMatchObject({
+      kind: "open",
+      reportedAt: "2026-10-08T07:40:00Z",
+      reportedTo: "Cloudflare",
+      escalation: {
+        at: "2026-10-10T08:05:00Z",
+        label: "Registry escalation",
+        target: "the registry of .com",
+      },
+    });
+    if (progress?.kind !== "open") throw new Error("open");
+    expect(progress.elapsed).toBeCloseTo(4 + 55 / 60);
+    expect(progress.position).toBeCloseTo(4.9167 / 48.4167, 3);
+    expect(siteCheck(detail())).toEqual({
+      lastAt: "2026-10-08T08:05:00.000Z",
+      nextAt: "2026-10-08T14:05:00Z",
+      online: true,
+      offlineSince: null,
+    });
+  });
+
+  it("stops the clock at the first offline check", () => {
+    const closed = detail({
+      threat: { ...detail().threat, status: "taken_down" },
+      timeline: [
+        ...detail().timeline,
+        { type: "offline_detected", at: "2026-10-09T05:40:00Z", detail: {} },
+        { type: "taken_down", at: "2026-10-12T05:40:00Z", detail: {} },
+      ],
+    });
+    expect(takedownProgress(closed, new Date())).toMatchObject({
+      kind: "offline",
+      hours: 22,
+      takenDownAt: "2026-10-12T05:40:00Z",
+    });
+    expect(siteCheck(closed)).toBeNull();
+    expect(takedownProgress(detail({ notices: [] }), new Date())).toBeNull();
   });
 });

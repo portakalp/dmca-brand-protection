@@ -1,22 +1,25 @@
 import type { ReactNode } from "react";
 
+import type { IndicatorTone } from "@/lib/status";
 import { cn } from "@/lib/utils";
+
+import { Indicator } from "./status-badge";
 
 export type PillTone = "neutral" | "waiting" | "success" | "danger" | "scheduled" | "brand";
 
-const TONES: Record<PillTone, string> = {
-  neutral: "border-control-border bg-segment text-text-strong",
-  waiting:
-    "border-[var(--status-notice-border)] bg-[var(--status-notice-bg)] text-[var(--status-notice-fg)]",
-  success:
-    "border-[var(--status-taken-border)] bg-[var(--status-taken-bg)] text-[var(--status-taken-fg)]",
-  danger:
-    "border-[var(--status-active-border)] bg-[var(--status-active-bg)] text-[var(--status-active-fg)]",
-  scheduled: "border-dashed border-axis-line bg-panel text-text-secondary",
-  brand: "border-transparent bg-brand-soft text-brand font-semibold tabular dark:text-link",
+const TONES: Record<PillTone, IndicatorTone | null> = {
+  neutral: null,
+  waiting: "warning",
+  success: "good",
+  danger: "critical",
+  scheduled: "scheduled",
+  brand: null,
 };
 
-/** The small rounded labels of the threat detail (Your site, Clone, Received, Scheduled, ...). */
+/**
+ * The old pill API, now drawn as the status indicator (icon + word, no tinted pill). "neutral"
+ * and "brand" are plain words with no icon. New code uses `Indicator` from status-badge.tsx.
+ */
 export function Pill({
   tone = "neutral",
   className,
@@ -26,15 +29,14 @@ export function Pill({
   className?: string;
   children: ReactNode;
 }) {
+  const indicator = TONES[tone];
   return (
-    <span
-      className={cn(
-        "inline-flex flex-none items-center rounded-full border px-2 py-px text-xs leading-[18px] font-medium whitespace-nowrap",
-        TONES[tone],
-        className,
-      )}
+    <Indicator
+      tone={indicator ?? "neutral"}
+      icon={indicator ? undefined : null}
+      className={cn(tone === "neutral" && "text-text-2", className)}
     >
       {children}
-    </span>
+    </Indicator>
   );
 }

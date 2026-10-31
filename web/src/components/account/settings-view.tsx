@@ -1,17 +1,24 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, UserPlus } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { CircleMinus, KeyRound, Mail, UserPlus } from "lucide-react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Field, FormError } from "@/components/auth/form";
 import { RecoveryCodes } from "@/components/auth/recovery-codes";
-import { Pill } from "@/components/pill";
 import { PageHeader } from "@/components/shell/page-header";
 import { usePanel } from "@/components/shell/panel";
 import { SimpleTable, Td, Th, Tr } from "@/components/simple-table";
-import { Card, CardTitle, ErrorState, errorMessage } from "@/components/states";
+import {
+  Card,
+  ErrorState,
+  LoadingState,
+  PanelBody,
+  PanelHeader,
+  errorMessage,
+} from "@/components/states";
+import { Indicator } from "@/components/status-badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,13 +48,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { accessOf, type WriteMode } from "@/lib/access";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { keys, useSettings, useUsers } from "@/lib/api/queries";
 import { longDay, todayIn } from "@/lib/period";
 
 const ROLE_LABELS: Record<Schemas["UserRole"], string> = { owner: "Owner", viewer: "Viewer" };
+const ROLE_HINTS: Record<Schemas["UserRole"], string> = {
+  owner: "Manages the whitelist, users and settings",
+  viewer: "Reads everything",
+};
 
 function day(at: string, timeZone: string): string {
   return longDay(todayIn(timeZone, new Date(at)));
@@ -77,8 +87,8 @@ function NewRecoveryCodes() {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="control" size="control">
-          <KeyRound aria-hidden="true" className="text-text-secondary" />
+        <Button variant="outline">
+          <KeyRound aria-hidden="true" />
           New recovery codes
         </Button>
       </DialogTrigger>
@@ -119,15 +129,15 @@ function NewRecoveryCodes() {
               <DialogFooter>
                 <Button
                   type="button"
-                  variant="control"
-                  size="control"
+                  variant="outline"
+
                   onClick={() => setOpen(false)}
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
-                  size="control"
+
                   disabled={code.trim().length < 6 || renew.isPending}
                 >
                   {renew.isPending ? "Checking…" : "Get new codes"}
@@ -141,41 +151,57 @@ function NewRecoveryCodes() {
   );
 }
 
+/** A label and its value: the spec's facts list (140px label column, dividers between rows). */
+function Fact({ term, children }: { term: string; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-3 border-t border-border py-2.5 first:border-t-0 first:pt-0 max-sm:grid-cols-[110px_minmax(0,1fr)]">
+      <dt className="text-[13px] text-text-2">{term}</dt>
+      <dd className="m-0 font-medium text-text [overflow-wrap:anywhere]">{children}</dd>
+    </div>
+  );
+}
+
 function AccountCard() {
   const { me } = usePanel();
   const user = me.user;
   return (
-    <Card aria-labelledby="account-title" className="flex flex-col gap-4 px-5 py-[18px]">
-      <CardTitle id="account-title" title="Your account" />
-      <dl className="m-0 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-        <div>
-          <dt className="text-[12.5px] text-text-tertiary">Name</dt>
-          <dd className="m-0 text-[14px] font-medium">{user.display_name ?? "—"}</dd>
+    <Card aria-labelledby="account-title" className="flex flex-col">
+      <PanelHeader
+        id="account-title"
+        title="Your account"
+        description="The person signed in on this browser."
+      />
+      <PanelBody className="flex flex-col gap-5">
+        <dl className="m-0 flex max-w-[560px] flex-col">
+          <Fact term="Name">{user.display_name ?? "—"}</Fact>
+          <Fact term="E-mail">{user.email}</Fact>
+          <Fact term="Role">
+            {ROLE_LABELS[user.role]}
+            <span className="ml-2 font-normal text-text-3">{ROLE_HINTS[user.role]}</span>
+          </Fact>
+        </dl>
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-t border-border pt-4">
+          <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-1">
+            <h3 className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              Two-step verification
+              {user.totp_enabled ? (
+                <Indicator tone="good" className="text-[13px]">
+                  On
+                </Indicator>
+              ) : (
+                <Indicator tone="warning" className="text-[13px]">
+                  Not set up
+                </Indicator>
+              )}
+            </h3>
+            <p className="max-w-prose text-[13px] text-text-2">
+              Every sign-in asks for a code from your authenticator app. Recovery codes get you in
+              if you lose your phone.
+            </p>
+          </div>
+          {user.totp_enabled ? <NewRecoveryCodes /> : null}
         </div>
-        <div>
-          <dt className="text-[12.5px] text-text-tertiary">E-mail</dt>
-          <dd className="m-0 text-[14px] font-medium [overflow-wrap:anywhere]">{user.email}</dd>
-        </div>
-        <div>
-          <dt className="text-[12.5px] text-text-tertiary">Role</dt>
-          <dd className="m-0 text-[14px] font-medium">{ROLE_LABELS[user.role]}</dd>
-        </div>
-      </dl>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-row-divider pt-4">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <p className="flex items-center gap-2 text-[14px] font-semibold">
-            Two-step verification
-            <Pill tone={user.totp_enabled ? "success" : "waiting"}>
-              {user.totp_enabled ? "On" : "Not set up"}
-            </Pill>
-          </p>
-          <p className="text-[13px] text-text-secondary">
-            Every sign-in asks for a code from your authenticator app. Recovery codes get you in if
-            you lose your phone.
-          </p>
-        </div>
-        {user.totp_enabled ? <NewRecoveryCodes /> : null}
-      </div>
+      </PanelBody>
     </Card>
   );
 }
@@ -213,7 +239,7 @@ function InviteUser({ mode }: { mode: WriteMode }) {
       }}
     >
       <DialogTrigger asChild>
-        <Button size="control" disabled={mode === "disabled"}>
+        <Button disabled={mode === "disabled"}>
           <UserPlus aria-hidden="true" />
           Invite
         </Button>
@@ -243,11 +269,11 @@ function InviteUser({ mode }: { mode: WriteMode }) {
             onChange={(event) => setEmail(event.target.value)}
           />
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor={roleId} className="text-[13px] font-medium">
+            <Label htmlFor={roleId} className="text-[13px] font-semibold text-text">
               Role
             </Label>
             <Select value={role} onValueChange={(value) => setRole(value as Schemas["UserRole"])}>
-              <SelectTrigger id={roleId} className="min-h-10 w-full rounded-control">
+              <SelectTrigger id={roleId} className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -257,10 +283,10 @@ function InviteUser({ mode }: { mode: WriteMode }) {
             </Select>
           </div>
           <DialogFooter>
-            <Button type="button" variant="control" size="control" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" size="control" disabled={!email.trim() || invite.isPending}>
+            <Button type="submit" disabled={!email.trim() || invite.isPending}>
               {invite.isPending ? "Sending…" : "Send invitation"}
             </Button>
           </DialogFooter>
@@ -288,7 +314,7 @@ function Confirm({
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="control" size="control" disabled={disabled} aria-label={label}>
+        <Button variant="outline" size="sm" disabled={disabled} aria-label={label}>
           {action}
         </Button>
       </AlertDialogTrigger>
@@ -341,21 +367,21 @@ function UsersCard({ mode }: { mode: WriteMode }) {
 
   return (
     <Card aria-labelledby="users-title" className="flex flex-col overflow-hidden">
-      <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-[18px] pb-4">
-        <CardTitle
-          id="users-title"
-          title="Users"
-          subtitle="Owners manage the whitelist, users and settings; viewers read everything."
-        />
-        <InviteUser mode={mode} />
-      </div>
+      <PanelHeader
+        id="users-title"
+        title="Users"
+        description="Owners manage the whitelist, users and settings; viewers read everything."
+        actions={<InviteUser mode={mode} />}
+        className="pb-4"
+      />
       {users.isPending ? (
-        <div aria-busy="true" aria-label="Loading users" className="flex flex-col gap-2 px-5 pb-5">
-          <Skeleton className="h-11" />
-          <Skeleton className="h-11" />
-        </div>
+        <LoadingState rows={2} label="Loading users" className="border-t border-border" />
       ) : users.isError ? (
-        <ErrorState error={users.error} onRetry={() => users.refetch()} />
+        <ErrorState
+          error={users.error}
+          onRetry={() => users.refetch()}
+          className="border-t border-border"
+        />
       ) : (
         <SimpleTable caption="Users and invitations" minWidth={640}>
           <thead>
@@ -365,7 +391,7 @@ function UsersCard({ mode }: { mode: WriteMode }) {
               <Th>Status</Th>
               <Th>Last sign-in</Th>
               {writes ? (
-                <Th>
+                <Th className="w-24">
                   <span className="sr-only">Actions</span>
                 </Th>
               ) : null}
@@ -374,29 +400,33 @@ function UsersCard({ mode }: { mode: WriteMode }) {
           <tbody>
             {users.data.users.map((user) => (
               <Tr key={user.id}>
-                <Td>
-                  <span className="flex flex-col">
-                    <span className="font-medium text-text">{user.display_name ?? user.email}</span>
+                <Td primary>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate font-medium text-text">
+                      {user.display_name ?? user.email}
+                    </span>
                     {user.display_name ? (
-                      <span className="text-[12.5px] text-text-tertiary">{user.email}</span>
+                      <span className="truncate text-[12.5px] text-text-3">{user.email}</span>
                     ) : null}
                   </span>
                 </Td>
-                <Td>{ROLE_LABELS[user.role]}</Td>
-                <Td>
+                <Td label="Role">{ROLE_LABELS[user.role]}</Td>
+                <Td label="Status">
                   {user.disabled ? (
-                    <Pill>Disabled</Pill>
+                    <Indicator tone="neutral" icon={CircleMinus}>
+                      Disabled
+                    </Indicator>
                   ) : user.totp_enabled ? (
-                    <Pill tone="success">Active</Pill>
+                    <Indicator tone="done">Active</Indicator>
                   ) : (
-                    <Pill tone="waiting">Setting up</Pill>
+                    <Indicator tone="warning">Setting up</Indicator>
                   )}
                 </Td>
-                <Td className="tabular whitespace-nowrap">
+                <Td label="Last sign-in" className="tabular whitespace-nowrap">
                   {user.last_login_at ? day(user.last_login_at, timeZone) : "Never"}
                 </Td>
                 {writes ? (
-                  <Td className="py-1.5 text-right">
+                  <Td action className="py-1.5 text-right">
                     {user.id !== me.user.id && !user.disabled ? (
                       <Confirm
                         label={`Disable ${user.email}`}
@@ -413,18 +443,20 @@ function UsersCard({ mode }: { mode: WriteMode }) {
             ))}
             {users.data.invitations.map((invitation) => (
               <Tr key={invitation.id}>
-                <Td>
-                  <span className="font-medium text-text">{invitation.email}</span>
+                <Td primary>
+                  <span className="block truncate font-medium text-text">{invitation.email}</span>
                 </Td>
-                <Td>{ROLE_LABELS[invitation.role]}</Td>
-                <Td>
-                  <Pill tone="scheduled">Invited</Pill>
+                <Td label="Role">{ROLE_LABELS[invitation.role]}</Td>
+                <Td label="Status">
+                  <Indicator tone="scheduled" icon={Mail}>
+                    Invited
+                  </Indicator>
                 </Td>
-                <Td className="tabular whitespace-nowrap">
+                <Td label="Invitation" className="tabular whitespace-nowrap">
                   Link valid until {day(invitation.expires_at, timeZone)}
                 </Td>
                 {writes ? (
-                  <Td className="py-1.5 text-right">
+                  <Td action className="py-1.5 text-right">
                     <Confirm
                       label={`Withdraw the invitation to ${invitation.email}`}
                       title={`Withdraw the invitation to ${invitation.email}?`}
@@ -504,11 +536,11 @@ function PreferencesForm({
           onChange={(event) => setEmail(event.target.value)}
         />
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={zoneId} className="text-[13px] font-medium">
+          <Label htmlFor={zoneId} className="text-[13px] font-semibold text-text">
             Time zone
           </Label>
           <Select value={zone} onValueChange={setZone} disabled={locked}>
-            <SelectTrigger id={zoneId} className="min-h-10 w-full rounded-control">
+            <SelectTrigger id={zoneId} className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="max-h-72">
@@ -519,14 +551,14 @@ function PreferencesForm({
               ))}
             </SelectContent>
           </Select>
-          <p className="text-[12px] text-text-tertiary">
+          <p className="text-[12.5px] text-text-3">
             Days, charts and reports are counted in this time zone.
           </p>
         </div>
       </div>
       {mode !== "hidden" ? (
         <div>
-          <Button type="submit" size="control" disabled={locked || !changed || save.isPending}>
+          <Button type="submit" disabled={locked || !changed || save.isPending}>
             {save.isPending ? "Saving…" : "Save changes"}
           </Button>
         </div>
@@ -538,14 +570,24 @@ function PreferencesForm({
 function PreferencesCard({ mode }: { mode: WriteMode }) {
   const settings = useSettings();
   return (
-    <Card aria-labelledby="prefs-title" className="flex flex-col gap-4 px-5 py-[18px]">
-      <CardTitle id="prefs-title" title="Alerts and time zone" />
+    <Card aria-labelledby="prefs-title" className="flex flex-col">
+      <PanelHeader
+        id="prefs-title"
+        title="Alerts and time zone"
+        description="Where we announce new threats, and the time zone every day and report uses."
+      />
       {settings.isPending ? (
-        <Skeleton aria-label="Loading settings" className="h-20" />
+        <LoadingState rows={2} label="Loading settings" />
       ) : settings.isError ? (
         <ErrorState error={settings.error} onRetry={() => settings.refetch()} />
       ) : (
-        <PreferencesForm key={JSON.stringify(settings.data)} settings={settings.data} mode={mode} />
+        <PanelBody>
+          <PreferencesForm
+            key={JSON.stringify(settings.data)}
+            settings={settings.data}
+            mode={mode}
+          />
+        </PanelBody>
       )}
     </Card>
   );
@@ -564,10 +606,11 @@ export function SettingsView() {
           <PreferencesCard mode={access.settings} />
         </>
       ) : (
-        <Card className="px-5 py-[18px]">
-          <CardTitle
+        <Card aria-labelledby="team-title" className="pb-5 max-sm:pb-4">
+          <PanelHeader
+            id="team-title"
             title="Team and alerts"
-            subtitle="Only owners manage users, the alert e-mail and the time zone."
+            description="Only owners manage users, the alert e-mail and the time zone. Ask an owner of your workspace to change them."
           />
         </Card>
       )}

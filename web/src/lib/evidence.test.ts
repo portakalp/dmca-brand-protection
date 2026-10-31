@@ -6,7 +6,8 @@ import {
   fileSize,
   matchedSignals,
   retainedUntil,
-  ringDash,
+  fileLabel,
+  shortHash,
   sortFiles,
 } from "./evidence";
 
@@ -58,8 +59,16 @@ describe("evidence", () => {
     expect(retainedUntil(files)).toBe("2027-04-01T00:00:00Z");
   });
 
-  it("draws the ring and lists the matched signals in the design's order", () => {
-    expect(ringDash(94)).toBe("318.93 339.29"); // the design's stroke-dasharray
+  it("says what each file is and shortens its hash", () => {
+    expect(fileLabel(file("1", "screenshot", "desktop"))).toBe("Desktop screenshot");
+    expect(fileLabel(file("2", "screenshot_full", "mobile"))).toBe("Mobile full-page screenshot");
+    expect(fileLabel(file("3", "rdap", null))).toBe("Registration record");
+    const hash = "3f9a62d1c07be44a19e8f3c2b5d6a7e80c4f1b29d73e6a5c8b0f4e2d10e7bc21e";
+    expect(shortHash(hash)).toBe("3f9a62d1c07be44a19e8f3c2…0e7bc21e");
+    expect(shortHash("abc")).toBe("abc");
+  });
+
+  it("lists the matched signals in the design's order", () => {
     expect(
       matchedSignals([
         { name: "brand_in_domain", value: 92 },

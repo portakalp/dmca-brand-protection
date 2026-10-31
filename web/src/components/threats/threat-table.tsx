@@ -1,13 +1,13 @@
 "use client";
 
 import { createColumnHelper, flexRender, tableFeatures, useTable } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 
 import { usePanel } from "@/components/shell/panel";
-import { StatusBadge } from "@/components/status-badge";
+import { Status } from "@/components/status-badge";
 import type { Schemas } from "@/lib/api/client";
 import type { ThreatSort } from "@/lib/api/queries";
 import { categoryLabel, firstSeen, lastAction } from "@/lib/format";
@@ -46,6 +46,28 @@ export function threatHref(threat: Threat): string {
   return `/threats/${threat.id}`;
 }
 
+/** Sentence-case header cells on the sunken band. */
+const TH =
+  "border-y border-border bg-sunken px-3 py-[9px] text-left text-[12.5px] font-semibold whitespace-nowrap text-text-2 first:pl-5";
+
+/**
+ * Column classes, shared by the header and the cells. Hosted by drops out first on narrow
+ * screens. At 560px and below the same table becomes stacked rows: the domain on its own line,
+ * then status on the left and first seen on the right; last action drops out (the detail page has
+ * it). The explicit roles keep the table semantics when the rows become grids.
+ */
+const COLUMN: Record<string, { th?: string; td: string }> = {
+  domain: {
+    td: "max-w-[300px] max-[1100px]:max-w-[240px] max-[560px]:col-span-2 max-[560px]:max-w-none",
+  },
+  status: { td: "whitespace-nowrap max-[560px]:col-start-1" },
+  first_seen_at: {
+    td: "tabular whitespace-nowrap max-[560px]:col-start-2 max-[560px]:text-right max-[560px]:text-[13px] max-[560px]:text-text-3",
+  },
+  hosting: { th: "max-[860px]:hidden", td: "whitespace-nowrap max-[860px]:hidden!" },
+  last_action: { th: "max-[560px]:hidden", td: "min-w-[150px] max-[560px]:hidden!" },
+};
+
 export function ThreatTable({
   threats,
   sort,
@@ -66,16 +88,22 @@ export function ThreatTable({
           header: "Domain",
           cell: (info) => {
             const threat = info.row.original;
+            const unicode =
+              threat.domain_unicode && threat.domain_unicode !== threat.domain
+                ? ` (${threat.domain_unicode})`
+                : "";
             return (
               <>
                 <Link
                   href={threatHref(threat)}
-                  className="font-mono text-[13px] font-medium whitespace-nowrap text-text hover:text-link"
-                  title={threat.domain_unicode ?? undefined}
+                  title={`${threat.domain}${unicode}`}
+                  className="block truncate font-mono text-[13.5px] font-medium text-text underline decoration-border-strong underline-offset-4 group-hover:text-accent group-hover:decoration-accent hover:text-accent hover:decoration-accent"
                 >
                   {threat.domain}
                 </Link>
-                <span className="block text-[12px] text-text-tertiary">
+                <span className="mt-0.5 block truncate text-[12.5px] text-text-3">
+                  <span className="font-mono text-[12px]">{threat.number}</span>
+                  {" · "}
                   {categoryLabel(threat.category)}
                 </span>
               </>
@@ -84,19 +112,31 @@ export function ThreatTable({
         }),
         column.accessor("status", {
           header: "Status",
-          cell: (info) => <StatusBadge status={info.getValue()} />,
+          cell: (info) => <Status status={info.getValue()} />,
         }),
         column.accessor("first_seen_at", {
           header: "First seen",
-          cell: (info) => firstSeen(info.getValue(), timeZone),
+          cell: (info) => (
+            <>
+              <span className="hidden max-[560px]:inline">First seen </span>
+              {firstSeen(info.getValue(), timeZone)}
+            </>
+          ),
         }),
         column.accessor("hosting", {
-          header: "Hosting",
-          cell: (info) => info.getValue() ?? "—",
+          header: "Hosted by",
+          cell: (info) => info.getValue() ?? <span className="text-text-3">Not known yet</span>,
         }),
         column.accessor("last_action", {
           header: "Last action",
-          cell: (info) => lastAction(info.getValue(), info.row.original.last_action_at, timeZone),
+          cell: (info) => {
+            const text = info.getValue();
+            return text ? (
+              lastAction(text, info.row.original.last_action_at, timeZone)
+            ) : (
+              <span className="text-text-3">No action yet</span>
+            );
+          },
         }),
       ]),
     [timeZone],
@@ -104,75 +144,84 @@ export function ThreatTable({
   const table = useTable({ features, columns, data: threats });
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[660px] border-collapse text-[13.5px]">
-        <caption className="sr-only">{caption}</caption>
-        <thead>
-          {table.getHeaderGroups().map((group) => (
-            <tr key={group.id} className="bg-table-head">
-              {group.headers.map((header) => {
-                const sortable = onSort && SORTABLE[header.column.id];
-                const dir = direction(header.column.id, sort);
-                const label = flexRender(header.column.columnDef.header, header.getContext());
-                const Icon = dir === "asc" ? ArrowUp : dir === "desc" ? ArrowDown : ArrowUpDown;
-                return (
-                  <th
-                    key={header.id}
-                    scope="col"
-                    aria-sort={
-                      dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined
-                    }
-                    className="border-y border-card-border px-3 py-2.5 text-left text-[12px] font-medium whitespace-nowrap text-text-secondary first:pl-5 last:pr-5"
-                  >
-                    {sortable ? (
-                      <button
-                        type="button"
-                        onClick={() => onSort(nextSort(header.column.id, sort))}
-                        className="-mx-1 inline-flex items-center gap-1 rounded px-1 hover:text-text"
-                      >
-                        {label}
-                        <Icon
-                          aria-hidden="true"
-                          className={cn("size-3.5", !dir && "text-text-tertiary/70")}
-                        />
-                      </button>
-                    ) : (
-                      label
-                    )}
-                  </th>
-                );
-              })}
-            </tr>
-          ))}
-        </thead>
-        <tbody>
-          {table.getRowModel().rows.map((row) => (
-            <tr
-              key={row.id}
-              className="cursor-pointer border-row-divider not-first:border-t hover:bg-table-head"
-              // The domain link is the keyboard path; the whole row is a pointer target.
-              onClick={(event) => {
-                if ((event.target as HTMLElement).closest("a, button")) return;
-                router.push(threatHref(row.original));
-              }}
-            >
-              {row.getAllCells().map((cell) => (
-                <td
-                  key={cell.id}
-                  className={cn(
-                    "px-3 py-[11px] align-middle text-text-secondary first:pl-5 last:pr-5",
-                    cell.column.id !== "domain" &&
-                      cell.column.id !== "last_action" &&
-                      "whitespace-nowrap",
-                  )}
+    <table role="table" className="w-full border-collapse text-[13.5px] max-[560px]:block">
+      <caption className="sr-only">{caption}</caption>
+      <thead role="rowgroup" className="max-[560px]:sr-only">
+        {table.getHeaderGroups().map((group) => (
+          <tr key={group.id} role="row">
+            {group.headers.map((header) => {
+              const sortable = onSort && SORTABLE[header.column.id];
+              const dir = direction(header.column.id, sort);
+              const label = flexRender(header.column.columnDef.header, header.getContext());
+              const Icon = dir === "asc" ? ArrowUp : dir === "desc" ? ArrowDown : ArrowUpDown;
+              return (
+                <th
+                  key={header.id}
+                  scope="col"
+                  role="columnheader"
+                  aria-sort={
+                    dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined
+                  }
+                  className={cn(TH, COLUMN[header.column.id]?.th)}
                 >
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                  {sortable ? (
+                    <button
+                      type="button"
+                      onClick={() => onSort(nextSort(header.column.id, sort))}
+                      className="-mx-1 inline-flex items-center gap-1 rounded-xs px-1 hover:text-text"
+                    >
+                      {label}
+                      <Icon
+                        aria-hidden="true"
+                        strokeWidth={1.5}
+                        className={cn("size-3.5", dir ? "text-text" : "text-text-3")}
+                      />
+                    </button>
+                  ) : (
+                    label
+                  )}
+                </th>
+              );
+            })}
+            <th scope="col" role="columnheader" className={cn(TH, "w-9 pr-5 pl-0")}>
+              <span className="sr-only">Open</span>
+            </th>
+          </tr>
+        ))}
+      </thead>
+      <tbody role="rowgroup" className="max-[560px]:block">
+        {table.getRowModel().rows.map((row) => (
+          <tr
+            key={row.id}
+            role="row"
+            className="group cursor-pointer border-b border-border last:border-b-0 hover:bg-sunken max-[560px]:grid max-[560px]:grid-cols-[minmax(0,1fr)_auto] max-[560px]:items-center max-[560px]:gap-x-3 max-[560px]:gap-y-2 max-[560px]:px-4 max-[560px]:py-3"
+            // The domain link is the keyboard path; the whole row is a pointer target.
+            onClick={(event) => {
+              if ((event.target as HTMLElement).closest("a, button")) return;
+              router.push(threatHref(row.original));
+            }}
+          >
+            {row.getAllCells().map((cell) => (
+              <td
+                key={cell.id}
+                role="cell"
+                className={cn(
+                  "px-3 py-[11px] align-top text-text-2 first:pl-5 max-[560px]:block max-[560px]:min-w-0 max-[560px]:p-0 max-[560px]:first:p-0",
+                  COLUMN[cell.column.id]?.td,
+                )}
+              >
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </td>
+            ))}
+            <td
+              role="cell"
+              className="w-9 py-[11px] pr-5 pl-0 align-middle text-text-3 group-hover:text-accent max-[560px]:hidden"
+            >
+              <ChevronRight aria-hidden="true" strokeWidth={1.5} className="size-4" />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

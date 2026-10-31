@@ -916,25 +916,25 @@ Metrics are pure functions in `domain/metrics.py`, tested against the seed data.
 
 ## 18. Customer panel (web)
 
-- Next.js (App Router, strict TypeScript), Tailwind CSS, shadcn/ui, shadcn/ui charts (Recharts), Geist and Geist Mono, next-themes. Light theme by default; users may choose dark or follow the system.
+- Next.js (App Router, strict TypeScript), Tailwind CSS, shadcn/ui, shadcn/ui charts (Recharts), Red Hat Display, Red Hat Text and Red Hat Mono (`next/font/google`, self-hosted at build time), next-themes. Light theme by default; users may choose dark or follow the system.
 - Data: TanStack Query and openapi-fetch on the client. Types are generated with `openapi-typescript` from `backend/openapi.json` (`make web-types`); no hand-written API types. Forms use react-hook-form and zod.
 - Identity: the API's cookie. The Next.js middleware (`src/proxy.ts`, the Next.js 16 name for middleware) redirects to `/login` without a cookie; a 401 sends the client to `/login`. The one exception is `/print/report/[id]`: it needs the `X-Report-Token` header instead of a cookie, is rendered on the server and fetches its data there with the token, which never reaches the client.
 - When `EDGE_SHARED_SECRET` is set, the middleware also refuses requests without the matching `X-Edge-Auth` header.
 - The panel always calls the API on its own origin. Locally `next.config.ts` rewrites `/api/*` to `API_ORIGIN`; behind Caddy or the edge Worker, `/api/*` is routed to the api service. Cookies and CSRF work the same everywhere (K154).
 - Images and files come through `/api/v1/artifacts/{id}`.
 - Routes: `/login`, `/login/mfa`, `/invite/[token]`, `/forgot-password`, `/reset-password`, `/overview`, `/threats`, `/threats/[id]`, `/whitelist`, `/reports`, `/settings`, `/print/report/[id]` (a bare layout for the PDF).
-- Design: colors, spacing, type and copy follow the original panel design; `make web-e2e` writes screenshots of every screen to `web/test-results/` for comparison.
-- Light theme tokens: background `#F4F5F7`; card `#FFFFFF`, border `#EAECF0`; text `#101828`, secondary `#475467` and `#667085`; accent `#2250F4` (one variable, `--accent-brand`); card radius 14 px, main panel 16 px. The dark theme redefines the same token names under `.dark` (`src/app/globals.css`). Status colors are in product.md §12.
-- Numbers use `tabular-nums`; domains use Geist Mono.
-- Accessibility: real `<button>` and `<a>`, `aria-label` on icon buttons, a visible focus ring, contrast at least 4.5:1, full keyboard use; tested with axe.
-- On phones the side menu becomes a sheet and tables scroll horizontally inside their own box.
+- Design ("Plain sight"): every section has a plain heading and, where needed, one line saying what it shows; every number has a label and a unit; every status is an icon plus a word, never color alone. One container style (surface, 1 px border, 6 px radius, no shadow) is used only where it groups something. No gradients anywhere and no fill under chart lines. `make web-e2e` writes screenshots of every screen to `web/test-results/` for comparison.
+- Tokens (`src/app/globals.css`, light on `:root`, dark under `.dark`, each theme designed separately): cool slate neutrals (`--bg` `#F2F4F7`, `--surface` `#FFFFFF`, `--border` `#DDE2E8`, `--text` `#16202C`, `--text-2` `#475365`, `--text-3` `#5C6878`); one navy accent `--accent` `#1D4B7D` (dark `#8FB6E8`) for actions, links, the selected nav item and focus only. Status inks are reserved and separate from the accent: `--st-critical`, `--st-warning`, `--st-good`, `--st-neutral`. Charts use an emphasis pair: `--takedown` blue for anything about takedowns and `--context` gray for detections. Radius 6 px for panels, 4 px for controls. Status meanings are in product.md §12.
+- Headings and figures use Red Hat Display, body text Red Hat Text. Red Hat Mono is only for domains, case ids, file names and SHA-256 hashes. Table columns, counts and times use `tabular-nums`; hours always go through one formatter (`<Hours>`: `31h`, `4h 55m`).
+- Accessibility: real `<button>` and `<a>`, `aria-label` on icon buttons, a visible 2 px focus outline, contrast at least 4.5:1 in both themes, full keyboard use (the trend chart also has a "Show as table" view), `prefers-reduced-motion` respected; tested with axe.
+- On phones the side menu becomes a sheet behind a top bar, and tables turn into stacked rows, so nothing scrolls sideways at 390 px.
 - Every page has empty, loading and error states.
 - Build: `output: "standalone"` (`infra/docker/web.Dockerfile`).
 
 **Implementation.**
 
 - `src/app/`: routes; the `(auth)` group holds the sign-in pages, `(app)` the pages inside the shell.
-- `src/components/shell/`: side menu, brand picker, date range, notification bell, user menu.
+- `src/components/shell/`: side menu (wordmark, workspace row, nav, theme button, user menu), page header with the Period control.
 - `src/components/overview/`, `threats/`, `threat-detail/` (with the "This is our site" dialog), `whitelist/` (list, add, delete, CSV import), `account/` (reports, settings), `auth/`, `report/`.
 - `src/lib/api/`: generated types (`schema.d.ts`), client and queries; `src/lib/`: periods, formatting, statuses, URL state. Timeline, notice lines and rule notes of the threat detail are built in `src/lib/threat-detail.ts` from events and `next_steps`; evidence names and sizes in `src/lib/evidence.ts` (K159).
 - Write controls are decided in one place (`src/lib/access.ts`): not drawn for viewers, disabled on a read-only account with a banner explaining why; the demo uses its side-menu card instead of a banner (K160).

@@ -50,13 +50,13 @@ flowchart LR
 - **Reliable job hand-off.** The API never talks to Redis: it writes jobs to a transactional outbox that the scheduler dispatches. A reconciler rebuilds lost jobs from the case state, and every job is idempotent.
 - **Immutable evidence.** Each file is hashed before upload and written to a path that is never overwritten (GCS generation preconditions, hard links on the filesystem backend). The evidence ZIP carries a manifest with the hashes.
 - **Observability.** Structured logs, Prometheus metrics, 14 alert rules with promtool unit tests, Alertmanager mail and Grafana dashboards. `make alert-test` fires a real alarm into Mailpit.
-- **Tests.** 1,616 backend tests (1,029 unit, 583 integration, two end-to-end pipeline tests, a benchmark and an alarm test), 38 panel unit tests, 24 panel Playwright tests with axe accessibility checks, and 115 tests for the optional edge Worker. No test makes a real network call.
+- **Tests.** 1,616 backend tests (1,029 unit, 583 integration, two end-to-end pipeline tests, a benchmark and an alarm test), 45 panel unit tests, 24 panel Playwright tests with axe accessibility checks, and 115 tests for the optional edge Worker. No test makes a real network call.
 
 ## Screenshots
 
 | | |
 | --- | --- |
-| ![Threat detail with screenshots, AI review, infrastructure, timeline, notices and evidence](docs/images/threat-detail.png) **Threat detail:** side-by-side comparison, AI review, infrastructure, timeline, notices and the evidence package. The seeded demo case's screenshots, notices and timeline are illustrative design data. | ![Threat list with filters and statuses](docs/images/threats.png) **Threats:** every case, with filters, sorting and CSV export. |
+| ![Threat detail with takedown progress, screenshots, automated review, site owner, notices, timeline and evidence](docs/images/threat-detail.png) **Threat detail:** takedown progress, side-by-side comparison, automated review, who runs the site, abuse notices, timeline and the evidence package. The seeded demo case's screenshots, notices and timeline are illustrative design data. | ![Threat list with filters and statuses](docs/images/threats.png) **Threats:** every case, with filters, sorting and CSV export. |
 | ![Ops panel review queue with official and candidate screenshots and signals](docs/images/ops-review.png) **Ops review queue:** the official site and the candidate side by side, every signal, and a keyboard shortcut for each decision. | ![Monthly PDF report](docs/images/monthly-report.png) **Monthly report:** a PDF printed by the browser worker, plus a CSV export. |
 | ![Whitelist of official, partner, affiliate and social domains](docs/images/whitelist.png) **Whitelist:** domains Kalkan never reports, with CSV import and export. | ![Overview in the dark theme](docs/images/overview-dark.png) **Dark theme:** every screen has a light and a dark theme. |
 

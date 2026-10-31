@@ -62,7 +62,7 @@ export function LoginForm() {
           error={errors.password?.message}
           {...form.register("password")}
         />
-        <Link href="/forgot-password" className="-mt-2 self-end text-[13px] font-medium">
+        <Link href="/forgot-password" className="-mt-2 self-end text-[13px] font-medium underline">
           Forgot password?
         </Link>
         <Button type="submit" size="xl" disabled={isSubmitting}>

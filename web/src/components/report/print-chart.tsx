@@ -1,20 +1,20 @@
 "use client";
 
 import { useEffect } from "react";
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
 
 import type { Schemas } from "@/lib/api/client";
-import { xTicks, yMax } from "@/lib/chart";
+import { xTicks, yMax, yTicks } from "@/lib/chart";
 import { shortDay } from "@/lib/period";
 
-const SERIES = [
-  { key: "detected", color: "var(--chart-detected)", opacity: 0.1 },
-  { key: "taken_down", color: "var(--chart-taken-down)", opacity: 0.14 },
-] as const;
+const TICK = { fontSize: 10, fill: "var(--text-3)" };
+const AXIS_TITLE = { fontSize: 10, fill: "var(--text-2)" };
 
 /**
- * The overview's daily chart at a fixed paper size, without animation or tooltip. Once it is on
- * the page it marks the document ready: the printer waits for `html[data-report-ready]`.
+ * The overview's daily chart at a fixed paper size, without animation or tooltip: gray columns
+ * for detections (context), a 2px blue line for takedowns on a surface halo. No fill under the
+ * line. Once it is on the page it marks the document ready: the printer waits for
+ * `html[data-report-ready]`.
  */
 export function PrintChart({
   daily,
@@ -40,46 +40,67 @@ export function PrintChart({
   }, []);
   const top = yMax(daily);
   return (
-    <AreaChart
+    <ComposedChart
       width={width}
       height={height}
       data={daily}
-      margin={{ top: 8, right: 22, bottom: 0, left: -18 }}
+      margin={{ top: 6, right: 8, bottom: 16, left: 6 }}
     >
-      <CartesianGrid vertical={false} stroke="var(--grid-line)" strokeDasharray="3 4" />
+      <CartesianGrid vertical={false} stroke="var(--grid)" />
       <YAxis
         domain={[0, top]}
-        ticks={[0, top / 2, top]}
+        ticks={yTicks(top)}
         tickLine={false}
         axisLine={false}
         allowDecimals={false}
-        tick={{ fontSize: 10, fill: "var(--text-tertiary)" }}
-        width={38}
+        tick={TICK}
+        width={34}
+        label={{
+          value: "Domains per day",
+          angle: -90,
+          position: "insideLeft",
+          offset: 4,
+          style: { ...AXIS_TITLE, textAnchor: "middle" },
+        }}
       />
       <XAxis
         dataKey="day"
         ticks={xTicks(daily)}
         tickFormatter={shortDay}
         tickLine={false}
-        axisLine={{ stroke: "var(--axis-line)" }}
+        axisLine={{ stroke: "var(--axis)" }}
         interval={0}
-        tick={{ fontSize: 10, fill: "var(--text-tertiary)" }}
+        tick={TICK}
         tickMargin={6}
+        label={{ value: "Date", position: "insideBottom", offset: -12, style: AXIS_TITLE }}
       />
-      {SERIES.map((series) => (
-        <Area
-          key={series.key}
-          dataKey={series.key}
-          type="monotone"
-          stroke={series.color}
-          strokeWidth={2}
-          fill={series.color}
-          fillOpacity={series.opacity}
-          isAnimationActive={false}
-          dot={false}
-          activeDot={false}
-        />
-      ))}
-    </AreaChart>
+      <Bar
+        dataKey="detected"
+        fill="var(--context)"
+        maxBarSize={12}
+        radius={[1.5, 1.5, 0, 0]}
+        isAnimationActive={false}
+      />
+      <Line
+        type="linear"
+        dataKey="taken_down"
+        stroke="var(--surface)"
+        strokeWidth={5}
+        dot={false}
+        activeDot={false}
+        isAnimationActive={false}
+        legendType="none"
+      />
+      <Line
+        type="linear"
+        dataKey="taken_down"
+        stroke="var(--takedown)"
+        strokeWidth={2}
+        strokeLinejoin="round"
+        dot={false}
+        activeDot={false}
+        isAnimationActive={false}
+      />
+    </ComposedChart>
   );
 }

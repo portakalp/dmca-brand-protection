@@ -39,7 +39,7 @@ export function ForgotPasswordForm() {
           If {sentTo} has a Kalkan account, a link to choose a new password is on its way. It works
           once, for 24 hours.
         </AuthHeading>
-        <Link href="/login" className="text-[13.5px] font-medium">
+        <Link href="/login" className="text-[13.5px] font-medium underline">
           Back to sign in
         </Link>
       </>
@@ -65,7 +65,7 @@ export function ForgotPasswordForm() {
         <Button type="submit" size="xl" disabled={isSubmitting}>
           {isSubmitting ? "Sending…" : "Send the link"}
         </Button>
-        <Link href="/login" className="text-center text-[13.5px] font-medium">
+        <Link href="/login" className="text-center text-[13.5px] font-medium underline">
           Back to sign in
         </Link>
       </form>
@@ -116,7 +116,7 @@ export function ResetPasswordForm() {
         <AuthHeading title="This link doesn't work">
           Open the link from the e-mail again, or ask for a new one.
         </AuthHeading>
-        <Link href="/forgot-password" className="text-[13.5px] font-medium">
+        <Link href="/forgot-password" className="text-[13.5px] font-medium underline">
           Ask for a new link
         </Link>
       </>

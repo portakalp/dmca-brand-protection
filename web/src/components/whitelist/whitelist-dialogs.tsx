@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileUp, Plus, Trash2 } from "lucide-react";
+import { Check, FileUp, OctagonAlert, Plus, Trash2 } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -60,11 +60,11 @@ function KindSelect({ value, onChange }: { value: Kind; onChange: (kind: Kind) =
   const id = useId();
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id} className="text-[13px] font-medium">
+      <Label htmlFor={id} className="text-[13px] font-semibold text-text">
         Kind
       </Label>
       <Select value={value} onValueChange={(next) => onChange(next as Kind)}>
-        <SelectTrigger id={id} className="min-h-10 w-full rounded-control">
+        <SelectTrigger id={id} className="w-full">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -139,7 +139,7 @@ export function AddEntry({ mode }: { mode: WriteMode }) {
       }}
     >
       <DialogTrigger asChild>
-        <Button size="control" disabled={mode === "disabled"}>
+        <Button disabled={mode === "disabled"}>
           <Plus aria-hidden="true" />
           Add domain
         </Button>
@@ -182,11 +182,11 @@ export function AddEntry({ mode }: { mode: WriteMode }) {
           <KindSelect value={kind} onChange={setKind} />
           {me.brands.length > 1 ? (
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor={brandId} className="text-[13px] font-medium">
+              <Label htmlFor={brandId} className="text-[13px] font-semibold text-text">
                 Brand
               </Label>
               <Select value={brand} onValueChange={setBrand}>
-                <SelectTrigger id={brandId} className="min-h-10 w-full rounded-control">
+                <SelectTrigger id={brandId} className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -208,10 +208,10 @@ export function AddEntry({ mode }: { mode: WriteMode }) {
             onChange={(event) => setNote(event.target.value)}
           />
           <DialogFooter>
-            <Button type="button" variant="control" size="control" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" size="control" disabled={add.isPending}>
+            <Button type="submit" disabled={add.isPending}>
               {add.isPending ? "Adding…" : "Add domain"}
             </Button>
           </DialogFooter>
@@ -243,10 +243,10 @@ export function DeleteEntry({ entry, mode }: { entry: Schemas["WhitelistItem"]; 
       <AlertDialogTrigger asChild>
         <Button
           variant="ghost"
-          size="icon-control"
+          size="icon-sm"
           aria-label={`Remove ${entry.pattern}`}
           disabled={mode === "disabled" || remove.isPending}
-          className="text-text-tertiary hover:text-danger-fg"
+          className="text-text-3 hover:text-st-critical"
         >
           <Trash2 aria-hidden="true" />
         </Button>
@@ -343,8 +343,8 @@ export function ImportCsv({ mode }: { mode: WriteMode }) {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="control" size="control" disabled={mode === "disabled"}>
-          <FileUp aria-hidden="true" className="text-text-secondary" />
+        <Button variant="outline" disabled={mode === "disabled"}>
+          <FileUp aria-hidden="true" />
           Import CSV
         </Button>
       </DialogTrigger>
@@ -379,26 +379,26 @@ export function ImportCsv({ mode }: { mode: WriteMode }) {
             />
             <Button
               type="button"
-              variant="control"
-              size="control"
+              variant="outline"
+
               onClick={() => input.current?.click()}
             >
               {file ? "Choose another file" : "Choose a file"}
             </Button>
-            <span className="min-w-0 truncate text-[13px] text-text-secondary" aria-live="polite">
+            <span className="min-w-0 truncate text-[13px] text-text-2" aria-live="polite">
               {check.isPending ? "Checking the file…" : (file?.name ?? "No file chosen")}
             </span>
           </div>
 
           {preview && result ? (
             <>
-              <p role="status" className="text-[13.5px] text-text-strong">
+              <p role="status" className="text-[13.5px] text-text">
                 {count(result.added)} to add · {count(result.skipped)} already on the list ·{" "}
-                <span className={result.errors.length ? "text-danger-fg" : undefined}>
+                <span className={result.errors.length ? "font-semibold" : undefined}>
                   {count(result.errors.length)} with errors
                 </span>
               </p>
-              <div className="max-h-72 overflow-y-auto rounded-control border border-card-border">
+              <div className="max-h-72 overflow-y-auto rounded-sm border border-border [&_th]:border-t-0">
                 <SimpleTable caption="Rows in the file" minWidth={480}>
                   <thead>
                     <tr>
@@ -413,12 +413,31 @@ export function ImportCsv({ mode }: { mode: WriteMode }) {
                       const error = errors.get(row.line);
                       return (
                         <Tr key={row.line}>
-                          <Td className="tabular">{row.line}</Td>
-                          <Td className="font-mono text-[12.5px] text-text">
+                          <Td label="Line" className="tabular">
+                            {row.line}
+                          </Td>
+                          <Td primary className="font-mono text-[13px] font-medium text-text">
                             {row.pattern || "—"}
                           </Td>
-                          <Td>{row.kind || "other"}</Td>
-                          <Td className={error ? "text-danger-fg" : undefined}>{error ?? "OK"}</Td>
+                          <Td label="Kind">{row.kind || "other"}</Td>
+                          <Td label="Result" className="text-text">
+                            <span className="inline-flex items-start gap-[7px]">
+                              {error ? (
+                                <OctagonAlert
+                                  aria-hidden="true"
+                                  strokeWidth={1.5}
+                                  className="mt-0.5 size-4 flex-none text-st-critical"
+                                />
+                              ) : (
+                                <Check
+                                  aria-hidden="true"
+                                  strokeWidth={1.5}
+                                  className="mt-0.5 size-4 flex-none text-st-neutral"
+                                />
+                              )}
+                              {error ?? "OK"}
+                            </span>
+                          </Td>
                         </Tr>
                       );
                     })}
@@ -426,7 +445,7 @@ export function ImportCsv({ mode }: { mode: WriteMode }) {
                 </SimpleTable>
               </div>
               {preview.rows.length > PREVIEW_ROWS ? (
-                <p className="text-[12.5px] text-text-tertiary">
+                <p className="text-[12.5px] text-text-3">
                   Showing the first {PREVIEW_ROWS} of {count(preview.rows.length)} rows.
                   {result.errors.some((error) => error.line > PREVIEW_ROWS + 1)
                     ? " Some rows further down have errors too."
@@ -437,12 +456,12 @@ export function ImportCsv({ mode }: { mode: WriteMode }) {
           ) : null}
         </div>
         <DialogFooter>
-          <Button type="button" variant="control" size="control" onClick={() => setOpen(false)}>
+          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
           <Button
             type="button"
-            size="control"
+
             disabled={!result || result.added === 0 || commit.isPending}
             onClick={() => commit.mutate()}
           >

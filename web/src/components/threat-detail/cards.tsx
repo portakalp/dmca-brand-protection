@@ -1,66 +1,70 @@
 "use client";
 
-import {
-  AlertTriangle,
-  Check,
-  Cloud,
-  FileCode,
-  FileJson,
-  FileText,
-  Globe,
-  Image as ImageIcon,
-  Info,
-  Lock,
-  Server,
-  ShieldCheck,
-  UserRound,
-  type LucideIcon,
-} from "lucide-react";
+import { Copy, Download, Lock, Undo2, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 
-import { Pill, type PillTone } from "@/components/pill";
 import { usePanel } from "@/components/shell/panel";
-import { Card, CardTitle, EmptyState } from "@/components/states";
+import { Card, EmptyState, Note, PanelBody, PanelHeader } from "@/components/states";
+import { Indicator } from "@/components/status-badge";
+import { Button } from "@/components/ui/button";
 import type { Schemas } from "@/lib/api/client";
-import { fileNames, fileSize, retainedUntil, sortFiles } from "@/lib/evidence";
+import {
+  fileLabel,
+  fileNames,
+  fileSize,
+  retainedUntil,
+  shortHash,
+  sortFiles,
+} from "@/lib/evidence";
 import { categoryLabel, plural } from "@/lib/format";
 import { longDay } from "@/lib/period";
 import {
   clock,
+  countryName,
   dayTime,
   noticeRows,
   noticesCaption,
+  percent,
   ruleNote,
-  rulePassed,
+  ruleOutcome,
   sameDay,
   timelineSteps,
   zoneName,
-  type NoticeTone,
-  type Step,
+  type NoticeRow,
 } from "@/lib/threat-detail";
 import { cn } from "@/lib/utils";
 
 type Detail = Schemas["ThreatDetail"];
 
-function Row({ label, children, last }: { label: string; children: ReactNode; last?: boolean }) {
+/** A label/value list: labels in a fixed column, rows split by dividers. */
+function Facts({ rows }: { rows: [string, ReactNode][] }) {
   return (
-    <div
-      className={cn(
-        "flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-[9px]",
-        !last && "border-b border-row-divider",
-      )}
-    >
-      <dt className="text-[13px] text-text-tertiary">{label}</dt>
-      <dd className="m-0 text-right text-[13px] font-medium">{children}</dd>
-    </div>
+    <dl className="m-0 grid grid-cols-[140px_minmax(0,1fr)] max-sm:grid-cols-[110px_minmax(0,1fr)]">
+      {rows.map(([label, value], index) => (
+        <div key={label} className="contents">
+          <dt
+            className={cn(
+              "py-2.5 pr-3 text-[13px] text-text-2",
+              index > 0 && "border-t border-border",
+            )}
+          >
+            {label}
+          </dt>
+          <dd className={cn("m-0 py-2.5 font-medium", index > 0 && "border-t border-border")}>
+            {value}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
 function Aside({ children }: { children: ReactNode }) {
-  return <span className="font-normal text-text-tertiary"> · {children}</span>;
+  return <span className="ml-1.5 text-[12.5px] font-normal text-text-3">{children}</span>;
 }
 
-// --- AI review -------------------------------------------------------------------------------
+// --- automated review ------------------------------------------------------------------------
 
 const REVIEW_LABELS: Record<Schemas["VerdictSource"], string> = {
   ai_triage: "First review",
@@ -74,58 +78,56 @@ export function AiReviewCard({ detail }: { detail: Detail }) {
   const latest = reviews.at(-1);
   const note = ruleNote(detail);
   return (
-    <Card
-      aria-labelledby="review-title"
-      className="flex min-w-0 flex-[3_1_420px] flex-col gap-3.5 px-5 py-[18px]"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <CardTitle id="review-title" title="AI review" />
-        {latest ? (
-          <p className="text-[12.5px] leading-5 text-text-tertiary">
-            Reviewed {dayTime(latest.created_at, timeZone)}
-          </p>
-        ) : null}
-      </div>
+    <Card aria-labelledby="review-title" className="flex flex-col">
+      <PanelHeader
+        id="review-title"
+        title="Automated review"
+        description="Two AI reviews and our rule checks decide whether a site is a threat."
+        actions={
+          latest ? (
+            <span className="text-[13px] text-text-2 tabular">
+              {dayTime(latest.created_at, timeZone)}
+            </span>
+          ) : null
+        }
+      />
       {latest ? (
-        <>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <p className="text-[20px] leading-[26px] font-semibold tracking-[-0.015em]">
+        <PanelBody className="flex flex-1 flex-col">
+          <p className="mb-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="font-display text-[20px] font-semibold">
               {categoryLabel(latest.category)}
-            </p>
-            <Pill tone="brand" className="px-[9px] text-[12.5px]">
-              {latest.confidence.toFixed(2)} confidence
-            </Pill>
-          </div>
-          <p className="text-[14px] leading-[1.55] text-pretty text-text-strong">
-            {latest.short_explanation}
+            </span>
+            <span className="text-text-2">{percent(latest.confidence)} confidence</span>
           </p>
-          <dl className="m-0 flex flex-col border-t border-row-divider">
-            {reviews.map((review) => (
-              <Row key={review.source} label={REVIEW_LABELS[review.source]}>
-                <span className="tabular">
-                  {categoryLabel(review.category)} · {review.confidence.toFixed(2)}
-                </span>
-              </Row>
-            ))}
-            <Row label="Rule checks">{rulePassed(detail)}</Row>
-          </dl>
-          {note ? (
-            <p className="mt-auto flex items-start gap-2 text-[12.5px] leading-normal text-text-secondary">
-              <Info aria-hidden="true" className="mt-px size-4 flex-none text-text-tertiary" />
-              <span>{note}</span>
-            </p>
-          ) : null}
-        </>
+          <p className="mb-3 text-[12.5px] text-text-3">
+            Confidence is how sure the review is of this verdict. It is separate from visual
+            similarity, which only compares screenshots.
+          </p>
+          <p className="mb-3.5 text-pretty">{latest.short_explanation}</p>
+          <Facts
+            rows={[
+              ...reviews.map((review): [string, ReactNode] => [
+                REVIEW_LABELS[review.source],
+                <>
+                  {categoryLabel(review.category)}
+                  <Aside>at {percent(review.confidence)} confidence</Aside>
+                </>,
+              ]),
+              ["Rule checks", ruleOutcome(detail)],
+            ]}
+          />
+          {note ? <Note className="mt-3.5">{note}</Note> : null}
+        </PanelBody>
       ) : (
         <EmptyState title="Not reviewed yet">
-          The AI review appears here once the evidence has been checked.
+          The automated review appears here once the evidence has been checked.
         </EmptyState>
       )}
     </Card>
   );
 }
 
-// --- infrastructure --------------------------------------------------------------------------
+// --- who runs the site -----------------------------------------------------------------------
 
 /** "Cloudflare" for aria.ns.cloudflare.com and jake.ns.cloudflare.com. */
 export function nameServers(servers: string[]): string {
@@ -148,7 +150,7 @@ function daysBefore(registered: string, seen: string): string {
 }
 
 function place(name: string, country: string | null): string {
-  return country ? `${name}, ${country}` : name;
+  return country ? `${name}, ${countryName(country)}` : name;
 }
 
 export function InfrastructureCard({ detail }: { detail: Detail }) {
@@ -173,7 +175,7 @@ export function InfrastructureCard({ detail }: { detail: Detail }) {
       infra.proxy ? (
         <>
           {infra.proxy}
-          <Aside>{infra.origin_host ? "origin hidden" : "origin unknown"}</Aside>
+          <Aside>hides the real host</Aside>
         </>
       ) : (
         "None"
@@ -188,7 +190,9 @@ export function InfrastructureCard({ detail }: { detail: Detail }) {
         <Aside>disclosed by {infra.proxy}</Aside>
       </>,
     ]);
-  } else if (!infra.proxy) {
+  } else if (infra.proxy) {
+    rows.push(["Origin host", "Not disclosed yet"]);
+  } else {
     rows.push(["Hosting", infra.hosting ? place(infra.hosting, infra.hosting_country) : "Unknown"]);
   }
   if (tls?.issuer) {
@@ -202,49 +206,73 @@ export function InfrastructureCard({ detail }: { detail: Detail }) {
   }
 
   return (
-    <Card
-      aria-labelledby="infra-title"
-      className="flex min-w-0 flex-[2_1_340px] flex-col gap-2.5 px-5 py-[18px]"
-    >
-      <CardTitle
+    <Card aria-labelledby="infra-title" className="flex flex-col">
+      <PanelHeader
         id="infra-title"
-        title="Infrastructure"
-        subtitle="From RDAP, DNS and certificate lookups"
+        title="Who runs the site"
+        description="From domain registration records (RDAP), DNS and the site's certificate."
       />
-      <dl className="m-0 flex flex-col">
-        {rows.map(([label, value], index) => (
-          <Row key={label} label={label} last={index === rows.length - 1}>
-            {value}
-          </Row>
-        ))}
-      </dl>
+      <PanelBody>
+        <Facts rows={rows} />
+      </PanelBody>
+    </Card>
+  );
+}
+
+// --- abuse notices ---------------------------------------------------------------------------
+
+function noticeIcon(row: NoticeRow): LucideIcon | undefined {
+  return row.status === "Withdrawn" ? Undo2 : undefined;
+}
+
+export function NoticesCard({ detail }: { detail: Detail }) {
+  const { timeZone } = usePanel();
+  const rows = noticeRows(detail, timeZone);
+  return (
+    <Card aria-labelledby="notices-title" className="flex flex-1 flex-col">
+      <PanelHeader
+        id="notices-title"
+        title="Abuse notices"
+        description={noticesCaption(rows, detail)}
+      />
+      <PanelBody>
+        {rows.length ? (
+          <ul className="m-0 flex list-none flex-col p-0">
+            {rows.map((row, index) => (
+              <li
+                key={row.id}
+                className={cn(
+                  // The status keeps its column; a long subtitle wraps instead.
+                  "flex items-start justify-between gap-x-3",
+                  index > 0 ? "border-t border-border py-[11px]" : "pb-[11px]",
+                  index === rows.length - 1 && "pb-0",
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">{row.title}</p>
+                  <p className="text-[12.5px] text-text-3 tabular">{row.subtitle}</p>
+                </div>
+                <Indicator
+                  tone={row.tone}
+                  icon={noticeIcon(row)}
+                  className="flex-none text-[13.5px]"
+                >
+                  {row.status}
+                </Indicator>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[13px] text-text-2">
+            Notices appear here once the threat is confirmed.
+          </p>
+        )}
+      </PanelBody>
     </Card>
   );
 }
 
 // --- timeline --------------------------------------------------------------------------------
-
-function StepIcon({ tone }: { tone: Step["tone"] }) {
-  if (tone === "current") {
-    return (
-      <span className="inline-flex size-[22px] flex-none items-center justify-center rounded-full border-2 border-[var(--status-notice)] bg-[var(--status-notice-bg)]">
-        <span className="size-2 rounded-full bg-[var(--status-notice)]" />
-      </span>
-    );
-  }
-  if (tone === "warning") {
-    return (
-      <span className="inline-flex size-[22px] flex-none items-center justify-center rounded-full bg-warning-icon-bg text-warning-icon">
-        <AlertTriangle className="size-3" strokeWidth={2.5} />
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex size-[22px] flex-none items-center justify-center rounded-full bg-brand text-white">
-      <Check className="size-3" strokeWidth={3} />
-    </span>
-  );
-}
 
 export function TimelineCard({ detail }: { detail: Detail }) {
   const { timeZone } = usePanel();
@@ -252,124 +280,86 @@ export function TimelineCard({ detail }: { detail: Detail }) {
   const moments = steps.flatMap((step) => (step.at ? [step.at] : []));
   const oneDay = moments.length > 0 && sameDay(moments, timeZone);
   const zone = zoneName(timeZone, moments[0] ?? new Date().toISOString());
-  const caption = oneDay
-    ? `${dayTime(moments[0], timeZone).split(",")[0]} · times in ${zone}`
-    : `Times in ${zone}`;
+  const description = oneDay
+    ? `Everything that happened on this case, ${dayTime(moments[0], timeZone).split(",")[0]}, times in ${zone}.`
+    : `Everything that happened on this case, times in ${zone}.`;
 
   return (
-    <Card
-      aria-labelledby="timeline-title"
-      className="flex min-w-0 flex-[3_1_420px] flex-col gap-4 px-5 pt-[18px] pb-1.5"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <CardTitle id="timeline-title" title="Timeline" />
-        <p className="text-[12.5px] leading-5 text-text-tertiary">{caption}</p>
-      </div>
-      <ol className="m-0 flex list-none flex-col p-0">
-        {steps.map((step, index) => (
-          <li key={step.id} className="flex gap-3.5">
-            <div aria-hidden="true" className="flex w-[22px] flex-none flex-col items-center">
-              <StepIcon tone={step.tone} />
-              {index < steps.length - 1 ? (
-                <span className="my-1 w-0.5 flex-auto rounded-sm bg-control-border" />
-              ) : null}
-            </div>
-            <div className="flex min-w-0 flex-auto flex-col gap-0.5 pt-px pb-[18px]">
-              <div className="flex flex-wrap justify-between gap-x-3 gap-y-0.5">
-                <span className="text-[14px] leading-5 font-semibold">{step.title}</span>
+    <Card aria-labelledby="timeline-title" className="flex flex-col">
+      <PanelHeader id="timeline-title" title="Timeline" description={description} />
+      <PanelBody>
+        <ol className="m-0 list-none p-0">
+          {steps.map((step, index) => {
+            const last = index === steps.length - 1;
+            const current = step.tone === "current";
+            return (
+              <li
+                key={step.id}
+                className={cn(
+                  "relative grid gap-x-2.5",
+                  oneDay
+                    ? "grid-cols-[52px_20px_minmax(0,1fr)]"
+                    : "grid-cols-[64px_20px_minmax(0,1fr)]",
+                  !last && "pb-4",
+                )}
+              >
                 {step.at ? (
                   <time
                     dateTime={step.at}
-                    className="tabular text-[13px] leading-5 text-text-secondary"
+                    className="pt-px text-right text-[13px] leading-[1.35] text-text-2 tabular"
                   >
-                    {oneDay ? clock(step.at, timeZone) : dayTime(step.at, timeZone)}
+                    {oneDay ? (
+                      clock(step.at, timeZone)
+                    ) : (
+                      <>
+                        <span className="block text-[12px] text-text-3">
+                          {dayTime(step.at, timeZone).split(",")[0]}
+                        </span>
+                        {clock(step.at, timeZone)}
+                      </>
+                    )}
                   </time>
                 ) : (
-                  <span className="text-[13px] leading-5 font-medium text-[var(--status-notice-fg)]">
-                    Now
-                  </span>
+                  <span className="pt-px text-right text-[13px] text-text-2">Now</span>
                 )}
-              </div>
-              <p className="text-[13px] leading-normal text-pretty text-text-secondary">
-                {step.text}
-              </p>
-            </div>
-          </li>
-        ))}
-      </ol>
-    </Card>
-  );
-}
-
-// --- notices ---------------------------------------------------------------------------------
-
-const CHANNEL_ICONS: Record<Schemas["Channel"], LucideIcon> = {
-  cloudflare: Cloud,
-  hosting: Server,
-  registrar: Globe,
-  registry: Globe,
-  google: ShieldCheck,
-};
-
-const NOTICE_TONES: Record<NoticeTone, PillTone> = {
-  neutral: "neutral",
-  waiting: "waiting",
-  success: "success",
-  danger: "danger",
-  scheduled: "scheduled",
-};
-
-export function NoticesCard({ detail }: { detail: Detail }) {
-  const { timeZone } = usePanel();
-  const rows = noticeRows(detail, timeZone);
-  return (
-    <Card aria-labelledby="notices-title" className="flex flex-col gap-2 px-5 pt-[18px] pb-2.5">
-      <CardTitle id="notices-title" title="Notices" subtitle={noticesCaption(rows, detail)} />
-      {rows.length ? (
-        <ul className="m-0 flex list-none flex-col p-0">
-          {rows.map((row) => {
-            const Icon = row.channel ? CHANNEL_ICONS[row.channel] : UserRound;
-            return (
-              <li
-                key={row.id}
-                className="flex items-center gap-3 border-row-divider py-2.5 not-last:border-b"
-              >
-                <span
-                  aria-hidden="true"
-                  className="inline-flex size-8 flex-none items-center justify-center rounded-[8px] bg-segment text-text-secondary"
-                >
-                  <Icon className="size-4" />
+                <span aria-hidden="true" className="relative flex justify-center">
+                  {!last ? (
+                    <span className="absolute top-1.5 -bottom-[22px] w-0.5 bg-border-strong" />
+                  ) : null}
+                  <span
+                    className={cn(
+                      "relative mt-[5px] size-2.5 rounded-full shadow-[0_0_0_3px_var(--surface)]",
+                      current
+                        ? "border-2 border-st-warning bg-surface"
+                        : step.tone === "warning"
+                          ? "bg-st-warning"
+                          : "bg-text-2",
+                    )}
+                  />
                 </span>
-                <span className="flex min-w-0 flex-auto flex-col">
-                  <span className="text-[13.5px] font-medium">{row.title}</span>
-                  <span className="text-xs text-text-tertiary">{row.subtitle}</span>
-                </span>
-                <Pill tone={NOTICE_TONES[row.tone]}>{row.status}</Pill>
+                <div className="min-w-0">
+                  <p className="font-semibold">{step.title}</p>
+                  <p className="text-[13px] text-pretty text-text-2">{step.text}</p>
+                </div>
               </li>
             );
           })}
-        </ul>
-      ) : (
-        <p className="pb-2 text-[13px] text-text-secondary">
-          Notices appear here once the threat is confirmed.
-        </p>
-      )}
+        </ol>
+      </PanelBody>
     </Card>
   );
 }
 
-// --- evidence --------------------------------------------------------------------------------
+// --- evidence package ------------------------------------------------------------------------
 
-const FILE_ICONS: Record<Schemas["ArtifactKind"], LucideIcon> = {
-  screenshot: ImageIcon,
-  screenshot_full: ImageIcon,
-  html: FileCode,
-  har: FileText,
-  rdap: FileJson,
-  dns: FileJson,
-  tls: FileJson,
-  favicon: ImageIcon,
-};
+async function copyHash(name: string, hash: string) {
+  try {
+    await navigator.clipboard.writeText(hash);
+    toast.success(`SHA-256 for ${name} copied`);
+  } catch {
+    toast.error("Couldn't copy. Select the hash and copy it instead.");
+  }
+}
 
 export function EvidenceCard({ detail }: { detail: Detail }) {
   const files = sortFiles(detail.files);
@@ -377,54 +367,86 @@ export function EvidenceCard({ detail }: { detail: Detail }) {
   const until = retainedUntil(files);
   const total = files.reduce((sum, file) => sum + file.bytes, 0);
   return (
-    <Card
-      aria-labelledby="evidence-title"
-      className="flex flex-auto flex-col gap-2 px-5 pt-[18px] pb-2.5"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <div>
-          <h2 id="evidence-title" className="text-[14px] leading-5 font-semibold">
-            Evidence package
-          </h2>
-          {until ? (
-            <p className="mt-0.5 flex items-center gap-1.5 text-[12.5px] leading-[18px] text-text-tertiary">
-              <Lock aria-hidden="true" className="size-[13px]" />
-              Stored unchanged until {longDay(until.slice(0, 10))}
-            </p>
-          ) : null}
-        </div>
+    <Card aria-labelledby="evidence-title" className="flex flex-col">
+      <PanelHeader
+        id="evidence-title"
+        title="Evidence package"
+        description={
+          until ? (
+            <>
+              <Lock
+                aria-hidden="true"
+                strokeWidth={1.5}
+                className="mr-1 inline size-[13px] align-[-2px]"
+              />
+              Stored unchanged until {longDay(until.slice(0, 10))}. Each file&apos;s SHA-256
+              fingerprint proves it was not altered.
+            </>
+          ) : (
+            "Each file's SHA-256 fingerprint proves it was not altered."
+          )
+        }
+        actions={
+          files.length ? (
+            <span className="text-[13px] text-text-2 tabular">
+              {files.length} {plural(files.length, "file", "files")} · {fileSize(total)}
+            </span>
+          ) : null
+        }
+      />
+      <PanelBody>
         {files.length ? (
-          <p className="tabular text-[12.5px] leading-5 text-text-tertiary">
-            {files.length} {plural(files.length, "file", "files")} · {fileSize(total)}
-          </p>
-        ) : null}
-      </div>
-      {files.length ? (
-        <ul className="m-0 flex list-none flex-col p-0">
-          {files.map((file) => {
-            const Icon = FILE_ICONS[file.kind];
-            const name = names.get(file.id)!;
-            return (
-              <li key={file.id} className="border-row-divider not-last:border-b">
-                <a
-                  href={file.url}
-                  download
-                  aria-label={`Download ${name}, ${fileSize(file.bytes)}`}
-                  className="flex min-h-10 items-center gap-2.5 text-text no-underline hover:text-text hover:no-underline"
+          <ul className="m-0 list-none p-0">
+            {files.map((file, index) => {
+              const name = names.get(file.id)!;
+              return (
+                <li
+                  key={file.id}
+                  className={cn(
+                    "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1",
+                    index > 0 ? "border-t border-border py-2.5" : "pb-2.5",
+                    index === files.length - 1 && "pb-0",
+                  )}
                 >
-                  <Icon aria-hidden="true" className="size-4 flex-none text-text-tertiary" />
-                  <span className="min-w-0 flex-auto truncate font-mono text-[12.5px]">{name}</span>
-                  <span className="tabular text-[12.5px] text-text-tertiary">
-                    {fileSize(file.bytes)}
+                  <span className="min-w-0 truncate">
+                    <span className="font-mono text-[13px] font-medium">{name}</span>
+                    <span className="ml-1.5 text-[12.5px] text-text-3">{fileLabel(file)}</span>
                   </span>
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <p className="pb-2 text-[13px] text-text-secondary">No evidence has been captured yet.</p>
-      )}
+                  <span className="text-[13px] text-text-2 tabular">{fileSize(file.bytes)}</span>
+                  <Button asChild variant="outline" size="icon-sm">
+                    <a
+                      href={file.url}
+                      download
+                      aria-label={`Download ${name}, ${fileSize(file.bytes)}`}
+                      title={`Download ${name}`}
+                    >
+                      <Download aria-hidden="true" />
+                    </a>
+                  </Button>
+                  <span className="col-span-full flex min-w-0 items-center gap-1.5 text-[12px] text-text-3">
+                    SHA-256
+                    <span className="min-w-0 truncate font-mono text-text-2" title={file.sha256}>
+                      {shortHash(file.sha256)}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={`Copy SHA-256 for ${name}`}
+                      title="Copy full SHA-256"
+                      onClick={() => void copyHash(name, file.sha256)}
+                    >
+                      <Copy aria-hidden="true" />
+                    </Button>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="text-[13px] text-text-2">No evidence has been captured yet.</p>
+        )}
+      </PanelBody>
     </Card>
   );
 }

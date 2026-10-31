@@ -1,11 +1,13 @@
+import { ArrowDown, ArrowUp, Shield } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { ChangePill, SpeedPill } from "@/components/overview/kpi-cards";
 import { ChannelsCard } from "@/components/overview/side-cards";
 import { StatusCard } from "@/components/overview/status-card";
-import { Card, CardTitle } from "@/components/states";
+import { Card, Hours, PanelBody, PanelHeader } from "@/components/states";
+import { Meter } from "@/components/ui/meter";
 import type { ReportData } from "@/lib/api/report-data";
-import { CHANNEL_LABELS, count, hours, plural } from "@/lib/format";
+import { totals } from "@/lib/chart";
+import { CHANNEL_LABELS, count, plural } from "@/lib/format";
 import { longDay } from "@/lib/period";
 import {
   METHOD_NOTES,
@@ -14,139 +16,190 @@ import {
   reportMonth,
   takedownTime,
 } from "@/lib/report";
+import { cn } from "@/lib/utils";
 
 import { PrintChart } from "./print-chart";
 
 /** The A4 content box at 96 dpi: 210 mm less the 12 mm side margins of the page rule. */
 const CONTENT_WIDTH = 700;
-const CHART_WIDTH = CONTENT_WIDTH - 40;
+/** The chart inside its panel: the content box less the panel's 20px padding and borders. */
+const CHART_WIDTH = CONTENT_WIDTH - 42;
 
-function Kpi({
+/**
+ * A change against the month before, in words. More detections or verified threats is neither
+ * good nor bad, so it stays neutral; only a faster median takedown turns green.
+ */
+function Delta({
+  change,
+  month,
+  speed = false,
+}: {
+  change: number | null;
+  month: string;
+  /** The median takedown time: lower is faster, and faster is good. */
+  speed?: boolean;
+}) {
+  if (change === null) return <span>No earlier month to compare with</span>;
+  if (change === 0) return <span>Same as {month}</span>;
+  const Icon = change < 0 ? ArrowDown : ArrowUp;
+  const amount = Math.abs(change);
+  const words = speed
+    ? `${amount}% ${change < 0 ? "faster" : "slower"}`
+    : `${amount}% ${change < 0 ? "fewer" : "more"}`;
+  const good = speed && change < 0;
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Icon
+        aria-hidden="true"
+        strokeWidth={1.5}
+        className={cn("size-3.5", good ? "text-st-good" : "text-text-2")}
+      />
+      <strong className={cn("font-semibold", good ? "text-st-good" : "text-text")}>{words}</strong>
+      than {month}
+    </span>
+  );
+}
+
+function Figure({
   title,
+  hint,
   value,
   unit,
   footer,
 }: {
   title: string;
-  value: string;
+  hint: string;
+  value: ReactNode;
   unit?: string;
   footer: ReactNode;
 }) {
   return (
-    <article className="flex min-w-0 flex-col gap-1.5 rounded-card border border-card-border bg-card px-4 pt-3.5 pb-3">
-      <h3 className="text-[12px] leading-4 font-medium text-text-secondary">{title}</h3>
-      <p className="tabular text-[26px] leading-8 font-semibold tracking-[-0.025em]">
+    <article className="flex min-w-0 flex-col gap-1 border-l border-border px-4 pt-3.5 pb-4 first:border-l-0">
+      <h3 className="text-[12.5px]">{title}</h3>
+      <p className="min-h-[30px] text-[10.5px] leading-[1.4] text-text-3">{hint}</p>
+      <p className="mt-1 font-display text-[28px] leading-[1.1] font-semibold tracking-[-0.01em]">
         {value}
         {unit ? (
-          <span className="ml-[3px] text-[15px] font-medium tracking-normal text-text-secondary">
+          <span className="ml-1.5 font-sans text-[12.5px] font-medium tracking-normal text-text-2">
             {unit}
           </span>
         ) : null}
       </p>
-      <p className="flex flex-wrap items-center gap-1 text-[11px] text-text-tertiary">{footer}</p>
+      <div className="mt-1 flex flex-col gap-1.5 text-[10.5px] text-text-2">{footer}</div>
     </article>
   );
 }
 
-function Kpis({ data }: { data: ReportData }) {
+function Figures({ data }: { data: ReportData }) {
   const { kpis, changes, previous_period } = data.overview;
-  const vs = `vs ${previousMonthName(previous_period)}`;
-  const against = (change: number | null) => (change === null ? "No earlier data" : vs);
+  const month = previousMonthName(previous_period);
   return (
-    <section aria-label="Key metrics" className="grid grid-cols-4 gap-3">
-      <Kpi
-        title="Detected"
-        value={count(kpis.detected)}
-        footer={
-          <>
-            <ChangePill change={changes.detected} />
-            {against(changes.detected)}
-          </>
-        }
+    <Card aria-labelledby="figures-title">
+      <PanelHeader
+        id="figures-title"
+        title="This month at a glance"
+        description={`Compared with ${month}.`}
+        className="pb-3.5"
       />
-      <Kpi
-        title="Verified threats"
-        value={count(kpis.verified)}
-        footer={
-          <>
-            <ChangePill change={changes.verified} />
-            {against(changes.verified)}
-          </>
-        }
-      />
-      <Kpi
-        title="Taken down"
-        value={count(kpis.taken_down)}
-        footer={
-          kpis.takedown_rate === null
-            ? "No verified threats"
-            : `${kpis.takedown_rate}% of verified threats`
-        }
-      />
-      <Kpi
-        title="Median takedown time"
-        value={hours(kpis.median_takedown_hours)}
-        unit={kpis.median_takedown_hours === null ? undefined : "h"}
-        footer={
-          <>
-            <SpeedPill change={changes.median_takedown_hours} />
-            {against(changes.median_takedown_hours)}
-          </>
-        }
-      />
-    </section>
+      <div className="grid grid-cols-4 border-t border-border">
+        <Figure
+          title="Detected"
+          hint="Lookalike domains our scans found"
+          value={count(kpis.detected)}
+          unit={plural(kpis.detected, "domain", "domains")}
+          footer={<Delta change={changes.detected} month={month} />}
+        />
+        <Figure
+          title="Verified threats"
+          hint="Confirmed as phishing or brand impersonation"
+          value={count(kpis.verified)}
+          unit={plural(kpis.verified, "threat", "threats")}
+          footer={<Delta change={changes.verified} month={month} />}
+        />
+        <Figure
+          title="Taken down"
+          hint="Verified threats that stayed offline for 72 hours"
+          value={count(kpis.taken_down)}
+          unit={plural(kpis.taken_down, "site", "sites")}
+          footer={
+            kpis.takedown_rate === null ? (
+              <span>No verified threats</span>
+            ) : (
+              <>
+                <span>
+                  <strong className="font-semibold text-text">{kpis.takedown_rate}%</strong> of the{" "}
+                  {count(kpis.verified)} verified {plural(kpis.verified, "threat", "threats")}
+                </span>
+                <Meter value={kpis.takedown_rate} />
+              </>
+            )
+          }
+        />
+        <Figure
+          title="Median takedown time"
+          hint="From our first abuse notice to the site going offline"
+          value={<Hours value={kpis.median_takedown_hours} />}
+          footer={<Delta change={changes.median_takedown_hours} month={month} speed />}
+        />
+      </div>
+    </Card>
   );
 }
 
 function Trend({ data }: { data: ReportData }) {
-  const { daily, kpis } = data.overview;
-  const takenDown = daily.reduce((sum, day) => sum + day.taken_down, 0);
+  const { daily } = data.overview;
+  const sum = totals(daily);
   return (
-    <Card aria-labelledby="trend-title" className="flex flex-col gap-3 px-5 pt-4 pb-3">
-      <CardTitle id="trend-title" title="Detections and takedowns" subtitle="Per day" />
-      <div className="flex gap-5 text-[12px] text-text-secondary">
-        <span className="inline-flex items-center gap-2">
-          <span aria-hidden="true" className="size-2.5 rounded-[3px] bg-[var(--chart-detected)]" />
-          Detected{" "}
-          <strong className="tabular font-semibold text-text">{count(kpis.detected)}</strong>
-        </span>
-        <span className="inline-flex items-center gap-2">
-          <span
-            aria-hidden="true"
-            className="size-2.5 rounded-[3px] bg-[var(--chart-taken-down)]"
-          />
-          Taken down <strong className="tabular font-semibold text-text">{count(takenDown)}</strong>
-        </span>
-      </div>
-      <PrintChart daily={daily} width={CHART_WIDTH} height={190} />
+    <Card aria-labelledby="trend-title">
+      <PanelHeader
+        id="trend-title"
+        title="Detections and takedowns per day"
+        description="Gray columns: lookalike domains we found. Blue line: sites that went offline."
+      />
+      <PanelBody className="flex flex-col gap-2 pt-3 pb-3">
+        <p className="flex flex-wrap gap-x-5 gap-y-1 text-[11.5px] text-text-2">
+          <span className="inline-flex items-center gap-2">
+            <span aria-hidden="true" className="size-2.5 rounded-[2px] bg-context" />
+            Detected{" "}
+            <strong className="tabular font-semibold text-text">{count(sum.detected)}</strong>
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <span aria-hidden="true" className="h-0.5 w-4 rounded-[1px] bg-takedown" />
+            Taken down{" "}
+            <strong className="tabular font-semibold text-text">{count(sum.taken_down)}</strong>
+          </span>
+        </p>
+        <PrintChart daily={daily} width={CHART_WIDTH} height={200} />
+      </PanelBody>
     </Card>
   );
 }
+
+const TH =
+  "border-y border-border bg-sunken px-2 py-1.5 text-left text-[11px] font-semibold whitespace-nowrap text-text-2 first:pl-3 last:pr-3";
+const TD = "px-2 py-1.5 align-top first:pl-3 last:pr-3";
 
 function TakenDown({ data }: { data: ReportData }) {
   const rows = data.taken_down;
   return (
     <section aria-labelledby="closed-title" className="flex flex-col gap-3">
-      <CardTitle
-        id="closed-title"
-        title="Threats taken down"
-        subtitle={`${count(rows.length)} ${plural(rows.length, "site", "sites")} first seen in ${reportMonth(data.report.period)} and offline now; times in ${data.timezone}`}
-      />
-      {rows.length === 0 ? (
-        <p className="text-[12.5px] text-text-tertiary">
-          No threat of this month is taken down yet.
+      <div>
+        <h2 id="closed-title">Threats taken down</h2>
+        <p className="mt-[3px] text-[12px] text-text-3">
+          {count(rows.length)} {plural(rows.length, "site", "sites")} first seen in{" "}
+          {reportMonth(data.report.period)} and offline now. Time runs from our first notice to the
+          site going offline; times are in {data.timezone}.
         </p>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-[12.5px] text-text-3">No threat of this month is taken down yet.</p>
       ) : (
         <table className="w-full border-collapse text-[11.5px]">
           <thead>
-            <tr className="text-left text-[11px] text-text-secondary">
+            <tr>
               {["Case", "Domain", "First notice", "Offline since", "Time", "Channel"].map(
                 (name) => (
-                  <th
-                    key={name}
-                    scope="col"
-                    className="border-y border-card-border bg-table-head px-2 py-1.5 font-medium first:pl-3 last:pr-3"
-                  >
+                  <th key={name} scope="col" className={cn(TH, name === "Time" && "text-right")}>
                     {name}
                   </th>
                 ),
@@ -155,21 +208,25 @@ function TakenDown({ data }: { data: ReportData }) {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.number} className="break-inside-avoid border-b border-row-divider">
-                <td className="tabular px-2 py-1.5 pl-3 whitespace-nowrap text-text-secondary">
+              <tr key={row.number} className="break-inside-avoid border-b border-border">
+                <td className={cn(TD, "font-mono text-[11px] whitespace-nowrap text-text-2")}>
                   {row.number}
                 </td>
-                <td className="px-2 py-1.5 font-mono break-all text-text">{row.domain}</td>
-                <td className="tabular px-2 py-1.5 whitespace-nowrap text-text-secondary">
+                <td className={cn(TD, "font-mono font-medium break-all text-text")}>
+                  {row.domain}
+                </td>
+                <td className={cn(TD, "tabular whitespace-nowrap text-text-2")}>
                   {reportMoment(row.first_notice_at, data.timezone)}
                 </td>
-                <td className="tabular px-2 py-1.5 whitespace-nowrap text-text-secondary">
+                <td className={cn(TD, "tabular whitespace-nowrap text-text-2")}>
                   {reportMoment(row.taken_down_at, data.timezone)}
                 </td>
-                <td className="tabular px-2 py-1.5 whitespace-nowrap text-text">
+                <td
+                  className={cn(TD, "tabular text-right font-medium whitespace-nowrap text-text")}
+                >
                   {takedownTime(row.takedown_hours)}
                 </td>
-                <td className="px-2 py-1.5 pr-3 whitespace-nowrap text-text-secondary">
+                <td className={cn(TD, "whitespace-nowrap text-text-2")}>
                   {row.channel ? CHANNEL_LABELS[row.channel] : "—"}
                 </td>
               </tr>
@@ -183,17 +240,21 @@ function TakenDown({ data }: { data: ReportData }) {
 
 function Method() {
   return (
-    <section aria-labelledby="method-title" className="flex break-inside-avoid flex-col gap-2.5">
-      <CardTitle
-        id="method-title"
-        title="How the numbers are counted"
-        subtitle="The same definitions as on your panel's overview for this month."
-      />
-      <dl className="grid grid-cols-[150px_1fr] gap-x-4 gap-y-1.5 text-[11.5px] leading-[17px]">
+    <section aria-labelledby="method-title" className="flex break-inside-avoid flex-col gap-3">
+      <div>
+        <h2 id="method-title">How the numbers are counted</h2>
+        <p className="mt-[3px] text-[12px] text-text-3">
+          The same definitions as on your panel&apos;s overview for this month.
+        </p>
+      </div>
+      <dl className="m-0 flex flex-col text-[11.5px] leading-[1.5]">
         {METHOD_NOTES.map((note) => (
-          <div key={note.term} className="contents">
-            <dt className="font-medium text-text">{note.term}</dt>
-            <dd className="text-text-secondary">{note.text}</dd>
+          <div
+            key={note.term}
+            className="grid grid-cols-[150px_minmax(0,1fr)] gap-4 border-t border-border py-2 first:border-t-0 first:pt-0"
+          >
+            <dt className="font-semibold text-text">{note.term}</dt>
+            <dd className="m-0 text-text-2">{note.text}</dd>
           </div>
         ))}
       </dl>
@@ -203,37 +264,49 @@ function Method() {
 
 /** The monthly report (§21): the panel's colours and type on A4. */
 export function ReportDocument({ data }: { data: ReportData }) {
-  const { period, live_threats: live } = data.overview;
+  const { period, live_threats: live, kpis } = data.overview;
   const month = reportMonth(data.report.period);
   return (
     <article
-      className="report-document mx-auto flex flex-col gap-4 bg-panel text-text"
+      className="report-document mx-auto flex flex-col gap-4 bg-surface text-text"
       style={{ width: CONTENT_WIDTH }}
     >
-      <header className="flex items-end justify-between gap-4 border-b border-card-border pb-3">
-        <div>
-          <p className="text-[12px] font-medium tracking-[0.04em] text-text-tertiary uppercase">
-            Kalkan · Brand protection report
+      <header className="flex items-end justify-between gap-4 border-b border-border pb-3.5">
+        <div className="flex flex-col gap-1">
+          <p className="flex items-center gap-2 text-[12px] font-medium text-text-2">
+            <span
+              aria-hidden="true"
+              className="inline-flex size-[18px] items-center justify-center rounded-[4px] bg-accent text-on-accent"
+            >
+              <Shield className="size-3" strokeWidth={2} />
+            </span>
+            Kalkan brand protection report
           </p>
-          <h1 className="text-[24px] leading-8 font-semibold tracking-[-0.02em]">{month}</h1>
-          <p className="text-[13px] text-text-secondary">{data.customer}</p>
+          <h1 className="text-[26px]">{month}</h1>
+          <p className="text-[13px] text-text-2">{data.customer}</p>
         </div>
-        <p className="text-right text-[11.5px] leading-4 text-text-tertiary">
-          {longDay(period.start)} – {longDay(period.end)}
+        <p className="text-right text-[11.5px] leading-[1.5] text-text-2">
+          <span className="tabular">
+            {longDay(period.start)} – {longDay(period.end)}
+          </span>
           <br />
-          {count(live)} {plural(live, "threat", "threats")} live when printed
+          {count(live)} {plural(live, "threat", "threats")} still live when printed
         </p>
       </header>
-      <Kpis data={data} />
+      <Figures data={data} />
       <Trend data={data} />
-      <div className="grid grid-cols-2 gap-3 [&>section]:flex-auto">
+      <div className="grid break-before-page break-inside-avoid grid-cols-2 items-stretch gap-4 [&>section]:flex [&>section]:flex-col">
         <StatusCard
           distribution={data.overview.status_distribution}
           detected={data.overview.kpis.detected}
+          compact
         />
-        <ChannelsCard channels={data.overview.takedowns_by_channel} />
+        <ChannelsCard
+          channels={data.overview.takedowns_by_channel}
+          overall={kpis.median_takedown_hours}
+        />
       </div>
-      <div className="flex break-before-page flex-col gap-6">
+      <div className="flex flex-col gap-6">
         <TakenDown data={data} />
         <Method />
       </div>

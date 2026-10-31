@@ -1,169 +1,250 @@
 "use client";
 
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { useId, useState } from "react";
+import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
 
-import { Card, CardTitle } from "@/components/states";
+import { Card, PanelBody, PanelHeader } from "@/components/states";
+import { Button } from "@/components/ui/button";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import type { Schemas } from "@/lib/api/client";
-import { peak, xTicks, yMax } from "@/lib/chart";
+import { peak, totals, xTicks, yMax, yTicks } from "@/lib/chart";
 import { count } from "@/lib/format";
-import { PRESETS, PRESET_DAYS, longDay, periodLabel, shortDay, type RangeKey } from "@/lib/period";
+import { longDay, periodName, shortDay, weekdayDay } from "@/lib/period";
 import { cn } from "@/lib/utils";
 
+type Day = Schemas["DayOut"];
+
+// Emphasis form: detections are the gray context, takedowns the one blue series.
 const CONFIG = {
-  detected: { label: "Detected", color: "var(--chart-detected)" },
-  taken_down: { label: "Taken down", color: "var(--chart-taken-down)" },
+  detected: { label: "Detected", color: "var(--context)" },
+  taken_down: { label: "Taken down", color: "var(--takedown)" },
 } satisfies ChartConfig;
 
-type Payload = { payload: Schemas["DayOut"] };
+const TICK = { fill: "var(--text-3)", fontSize: 12 };
+const AXIS_TITLE = { fill: "var(--text-2)", fontSize: 12 };
 
-function Tooltip({ active, payload }: { active?: boolean; payload?: readonly Payload[] }) {
+function DetectedKey({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn("size-2.5 flex-none rounded-[2px] bg-context", className)}
+    />
+  );
+}
+
+function TakenDownKey() {
+  return <span aria-hidden="true" className="h-0.5 w-4 flex-none rounded-full bg-takedown" />;
+}
+
+function Tooltip({ active, payload }: { active?: boolean; payload?: readonly { payload: Day }[] }) {
   const day = active ? payload?.[0]?.payload : undefined;
   if (!day) return null;
   return (
-    <div className="flex w-36 flex-col gap-1 rounded-control border border-control-border bg-popover px-2.5 py-2 text-[12px] leading-4 shadow-popover">
-      <span className="font-semibold text-text">{longDay(day.day)}</span>
-      {(["detected", "taken_down"] as const).map((key) => (
-        <span key={key} className="flex items-center gap-1.5 text-text-secondary">
-          <span className="size-2 rounded-[2px]" style={{ background: CONFIG[key].color }} />
-          {CONFIG[key].label}
-          <strong className="tabular ml-auto font-semibold text-text">{day[key]}</strong>
-        </span>
-      ))}
+    <div className="flex min-w-36 flex-col gap-1 rounded-sm bg-tooltip-bg px-2.5 py-2 text-[12.5px] leading-[1.35] text-tooltip-text">
+      <span className="text-tooltip-muted">{weekdayDay(day.day)}</span>
+      <span className="flex items-center gap-2">
+        <DetectedKey />
+        Detected
+        <strong className="tabular ml-auto pl-3 font-semibold">{day.detected}</strong>
+      </span>
+      <span className="flex items-center gap-2">
+        <TakenDownKey />
+        Taken down
+        <strong className="tabular ml-auto pl-3 font-semibold">{day.taken_down}</strong>
+      </span>
     </div>
   );
 }
 
-function Toggle({
-  range,
-  onChange,
-}: {
-  range: RangeKey;
-  onChange: (key: (typeof PRESETS)[number]) => void;
-}) {
+function DayTable({ id, daily }: { id: string; daily: Day[] }) {
+  const head =
+    "border-y border-border bg-sunken px-3 py-[9px] text-[12.5px] font-semibold text-text-2";
+  const cell = "border-b border-border px-3 py-2";
   return (
-    <div
-      role="group"
-      aria-label="Chart period"
-      className="inline-flex gap-0.5 rounded-control bg-segment p-[3px]"
-    >
-      {PRESETS.map((key) => (
-        <button
-          key={key}
-          type="button"
-          aria-pressed={range === key}
-          onClick={() => onChange(key)}
-          className={cn(
-            "min-h-[34px] rounded-lg px-3 text-[13px] font-medium text-text-secondary",
-            range === key && "bg-panel text-text shadow-segment",
-          )}
-        >
-          {PRESET_DAYS[key]} days
-        </button>
-      ))}
-    </div>
+    <table id={id} className="w-full border-collapse text-[13.5px]">
+      <caption className="sr-only">Detections and takedowns per day</caption>
+      <thead>
+        <tr>
+          <th scope="col" className={cn(head, "text-left")}>
+            Date
+          </th>
+          <th scope="col" className={cn(head, "text-right")}>
+            Detected
+          </th>
+          <th scope="col" className={cn(head, "text-right")}>
+            Taken down
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {daily.map((day) => (
+          <tr key={day.day}>
+            <th scope="row" className={cn(cell, "text-left font-normal text-text-2")}>
+              {weekdayDay(day.day)}
+            </th>
+            <td className={cn(cell, "tabular text-right")}>{day.detected}</td>
+            <td className={cn(cell, "tabular text-right")}>{day.taken_down}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
+/**
+ * "Detections and takedowns per day": gray columns for the domains found each day and a blue
+ * line for the sites that went offline. No area fill. Hover or arrow keys read a day; "Show as
+ * table" gives the same rows as a table.
+ */
 export function TrendChart({
   daily,
-  totals,
   period,
-  range,
-  onRange,
+  timeZone,
+  className,
 }: {
-  daily: Schemas["DayOut"][];
-  totals: { detected: number; taken_down: number };
+  daily: Day[];
   period: Schemas["PeriodOut"];
-  range: RangeKey;
-  onRange: (key: (typeof PRESETS)[number]) => void;
+  timeZone: string;
+  className?: string;
 }) {
+  const [asTable, setAsTable] = useState(false);
+  const tableId = useId();
+  const sums = totals(daily);
   const top = yMax(daily);
   const busiest = peak(daily);
+  const sameYear = period.start.slice(0, 4) === period.end.slice(0, 4);
   const description =
     `Daily detections and takedowns from ${longDay(period.start)} to ${longDay(period.end)}.` +
     (busiest && busiest.detected > 0
       ? ` Detections peaked at ${busiest.detected} on ${shortDay(busiest.day)}.`
       : "");
+
   return (
-    <Card
-      aria-labelledby="trend-title"
-      className="flex min-w-0 flex-[2_1_540px] flex-col gap-4 px-5 pt-[18px] pb-4"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <CardTitle
-          id="trend-title"
-          title="Detections and takedowns"
-          subtitle={`Per day, ${periodLabel(period.start, period.end).replace(/, \d{4}$/, "")}`}
-        />
-        <Toggle range={range} onChange={onRange} />
-      </div>
-      <div className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-text-secondary">
-        {(["detected", "taken_down"] as const).map((key) => (
-          <span key={key} className="inline-flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="size-2.5 rounded-[3px]"
-              style={{ background: CONFIG[key].color }}
-            />
-            {CONFIG[key].label}
-            <strong className="tabular font-semibold text-text">{count(totals[key])}</strong>
-          </span>
-        ))}
-      </div>
-      <figure className="m-0">
-        <ChartContainer
-          config={CONFIG}
-          className="aspect-auto h-[236px] w-full"
-          role="img"
-          aria-label={description}
-        >
-          <AreaChart data={daily} margin={{ top: 8, right: 18, bottom: 0, left: -18 }}>
-            <CartesianGrid vertical={false} stroke="var(--grid-line)" strokeDasharray="3 4" />
-            <YAxis
-              domain={[0, top]}
-              ticks={[0, top / 2, top]}
-              tickLine={false}
-              axisLine={false}
-              allowDecimals={false}
-              tick={{ fontSize: 11, fill: "var(--text-tertiary)" }}
-              width={38}
-            />
-            <XAxis
-              dataKey="day"
-              ticks={xTicks(daily)}
-              tickFormatter={shortDay}
-              tickLine={false}
-              axisLine={{ stroke: "var(--axis-line)" }}
-              interval={0}
-              tick={{ fontSize: 11, fill: "var(--text-tertiary)" }}
-              tickMargin={6}
-            />
-            <ChartTooltip
-              cursor={{ stroke: "var(--status-watching)", strokeDasharray: "3 3" }}
-              content={<Tooltip />}
-            />
-            {(["detected", "taken_down"] as const).map((key) => (
-              <Area
-                key={key}
-                dataKey={key}
-                type="monotone"
-                stroke={CONFIG[key].color}
-                strokeWidth={2}
-                fill={CONFIG[key].color}
-                fillOpacity={key === "detected" ? 0.1 : 0.14}
-                activeDot={{
-                  r: 4,
-                  fill: "var(--panel)",
-                  stroke: CONFIG[key].color,
-                  strokeWidth: 2,
-                }}
-                isAnimationActive={false}
-              />
-            ))}
-          </AreaChart>
-        </ChartContainer>
-      </figure>
+    <Card aria-labelledby="trend-title" className={cn("flex flex-col", className)}>
+      <PanelHeader
+        id="trend-title"
+        title="Detections and takedowns per day"
+        description={`${periodName(period.start, period.end, timeZone)}. Gray columns: lookalike domains we found. Blue line: sites that went offline.`}
+      />
+      <PanelBody className="flex flex-1 flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-1.5">
+          <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-[13px] text-text-2">
+            <span className="inline-flex items-center gap-2">
+              <DetectedKey />
+              Detected
+              <strong className="tabular font-semibold text-text">{count(sums.detected)}</strong>
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <TakenDownKey />
+              Taken down
+              <strong className="tabular font-semibold text-text">{count(sums.taken_down)}</strong>
+            </span>
+          </div>
+          <Button
+            variant="link"
+            size="sm"
+            aria-expanded={asTable}
+            aria-controls={asTable ? tableId : undefined}
+            onClick={() => setAsTable((value) => !value)}
+          >
+            {asTable ? "Show as chart" : "Show as table"}
+          </Button>
+        </div>
+        {asTable ? (
+          <DayTable id={tableId} daily={daily} />
+        ) : (
+          <figure className="m-0 flex min-h-0 flex-1 flex-col rounded-sm outline-offset-2 has-[.recharts-surface:focus-visible]:outline-2 has-[.recharts-surface:focus-visible]:outline-focus">
+            <figcaption className="sr-only">
+              {description} Use the left and right arrow keys to read each day.
+            </figcaption>
+            <ChartContainer
+              config={CONFIG}
+              className="aspect-auto h-[300px] w-full max-sm:h-[240px] min-[1181px]:h-auto min-[1181px]:min-h-[400px] min-[1181px]:flex-1"
+            >
+              <ComposedChart
+                accessibilityLayer
+                data={daily}
+                margin={{ top: 8, right: 8, bottom: 22, left: 4 }}
+              >
+                <CartesianGrid vertical={false} stroke="var(--grid)" />
+                <XAxis
+                  dataKey="day"
+                  ticks={xTicks(daily)}
+                  tickFormatter={shortDay}
+                  interval={0}
+                  tickLine={false}
+                  axisLine={{ stroke: "var(--axis)" }}
+                  tick={TICK}
+                  tickMargin={6}
+                  label={{
+                    value: sameYear ? `Date, ${period.end.slice(0, 4)}` : "Date",
+                    position: "insideBottom",
+                    offset: -18,
+                    ...AXIS_TITLE,
+                  }}
+                />
+                <YAxis
+                  domain={[0, top]}
+                  ticks={yTicks(top)}
+                  allowDecimals={false}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={TICK}
+                  width={44}
+                  label={{
+                    value: "Domains per day",
+                    angle: -90,
+                    position: "insideLeft",
+                    offset: 8,
+                    style: { textAnchor: "middle" },
+                    ...AXIS_TITLE,
+                  }}
+                />
+                <ChartTooltip
+                  cursor={{ stroke: "var(--text-3)", strokeWidth: 1 }}
+                  content={<Tooltip />}
+                  isAnimationActive={false}
+                />
+                <Bar
+                  dataKey="detected"
+                  fill="var(--context)"
+                  maxBarSize={14}
+                  radius={[1.5, 1.5, 0, 0]}
+                  activeBar={{ fill: "var(--text-3)" }}
+                  isAnimationActive={false}
+                />
+                {/* A surface halo first, so the line stays readable where it crosses columns. */}
+                <Line
+                  type="linear"
+                  dataKey="taken_down"
+                  stroke="var(--surface)"
+                  strokeWidth={5}
+                  dot={false}
+                  activeDot={false}
+                  legendType="none"
+                  tooltipType="none"
+                  isAnimationActive={false}
+                />
+                <Line
+                  type="linear"
+                  dataKey="taken_down"
+                  stroke="var(--takedown)"
+                  strokeWidth={2}
+                  strokeLinejoin="round"
+                  dot={false}
+                  activeDot={{
+                    r: 4.5,
+                    stroke: "var(--surface)",
+                    strokeWidth: 2,
+                    fill: "var(--takedown)",
+                  }}
+                  isAnimationActive={false}
+                />
+              </ComposedChart>
+            </ChartContainer>
+          </figure>
+        )}
+      </PanelBody>
     </Card>
   );
 }

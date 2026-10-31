@@ -1,4 +1,5 @@
 import type { Schemas } from "@/lib/api/client";
+import type { IndicatorTone } from "@/lib/status";
 
 import { categoryLabel } from "./format";
 import { todayIn } from "./period";
@@ -64,17 +65,186 @@ export function sameDay(moments: string[], timeZone: string): boolean {
   return new Set(moments.map((at) => todayIn(timeZone, new Date(at)))).size <= 1;
 }
 
+/** "97%": a review's confidence (0 to 1) as a whole percentage. */
+export function percent(confidence: number): string {
+  return `${Math.round(confidence * 100)}%`;
+}
+
+/** "Germany" for "DE"; the code itself when the name is unknown. */
+export function countryName(code: string): string {
+  try {
+    return new Intl.DisplayNames("en", { type: "region" }).of(code.toUpperCase()) ?? code;
+  } catch {
+    return code;
+  }
+}
+
 // --- the header ------------------------------------------------------------------------------
 
-const SOURCE_LABELS: Record<string, string> = {
-  ct: "Found in certificate transparency logs",
-  czds: "Found in a new zone file",
-  dnstwist: "Found among lookalike spellings",
-  manual: "Added by the Kalkan team",
+const SOURCE_FACTS: Record<string, [string, string]> = {
+  ct: ["Found in", "certificate logs (CT)"],
+  czds: ["Found in", "a new zone file"],
+  dnstwist: ["Found among", "lookalike spellings"],
+  manual: ["Added by", "the Kalkan team"],
 };
 
-export function sourceLabel(source: string | null): string | null {
-  return source ? (SOURCE_LABELS[source] ?? null) : null;
+/** The header's "Found in certificate logs (CT)", as a label and a value. */
+export function sourceFact(source: string | null): { label: string; value: string } | null {
+  const fact = source ? SOURCE_FACTS[source] : undefined;
+  return fact ? { label: fact[0], value: fact[1] } : null;
+}
+
+// --- takedown progress -----------------------------------------------------------------------
+
+/** How often a reported site is checked (product.md §9); the API sends the next check only. */
+export const CHECK_INTERVAL_HOURS = 6;
+
+const HOUR = 3_600_000;
+
+/** The first abuse report that went out (withdrawals do not count). */
+export function firstReport(detail: Detail): Notice | null {
+  return detail.notices
+    .filter((notice) => notice.sent_at !== null && notice.template !== "retraction")
+    .reduce<Notice | null>(
+      (first, notice) => (first === null || notice.sent_at! < first.sent_at! ? notice : first),
+      null,
+    );
+}
+
+/** The latest event that says whether the site answered: offline, or back online. */
+function lastReachability(detail: Detail): Event | null {
+  const events = detail.timeline.filter(
+    (event) => event.type === "offline_detected" || event.type === "online_again",
+  );
+  return events.length ? events[events.length - 1] : null;
+}
+
+export type SiteCheck = {
+  /** The last follow-up check: one interval before the next, never before the first report. */
+  lastAt: string | null;
+  nextAt: string | null;
+  /** What the checks found: still online, or offline since an event's time. */
+  online: boolean;
+  offlineSince: string | null;
+};
+
+/** The follow-up checks while a reported case is open; null before a report or once closed. */
+export function siteCheck(detail: Detail): SiteCheck | null {
+  const report = firstReport(detail);
+  if (!report || detail.threat.status !== "notice_sent") return null;
+  const nextAt = detail.next_steps.next_check_at;
+  let lastAt: string | null = null;
+  if (nextAt) {
+    const last = Date.parse(nextAt) - CHECK_INTERVAL_HOURS * HOUR;
+    if (last >= Date.parse(report.sent_at!)) lastAt = new Date(last).toISOString();
+  }
+  const reach = lastReachability(detail);
+  const offline = reach?.type === "offline_detected";
+  return { lastAt, nextAt, online: !offline, offlineSince: offline ? reach.at : null };
+}
+
+/** "the registry of .com": where an escalation goes, in a sentence. */
+export function escalationTarget(channel: Schemas["Channel"], detail: Detail): string {
+  const infra = detail.infrastructure;
+  switch (channel) {
+    case "registry":
+      return `the registry of .${tld(detail.threat.domain)}`;
+    case "registrar":
+      return infra.registrar ? `the registrar, ${shortOrg(infra.registrar)}` : "the registrar";
+    case "hosting": {
+      const host = infra.origin_host ?? infra.hosting;
+      return host ? `the hosting provider, ${shortOrg(host)}` : "the hosting provider";
+    }
+    case "cloudflare":
+      return "Cloudflare";
+    case "google":
+      return "Google Safe Browsing";
+  }
+}
+
+export type Progress =
+  | {
+      kind: "open";
+      reportedAt: string;
+      reportedTo: string;
+      /** Hours from the first report to now. */
+      elapsed: number;
+      /** The escalation that ends the track; null when none is scheduled. */
+      escalation: { at: string; label: string; target: string | null } | null;
+      /** Where now sits on the track, 0 to 1; null without an escalation. */
+      position: number | null;
+    }
+  | {
+      kind: "offline";
+      reportedAt: string;
+      reportedTo: string;
+      /** Hours from the first report to the first check that found the site offline. */
+      hours: number;
+      offlineAt: string;
+      takenDownAt: string | null;
+    };
+
+const REPORTED_TO: Record<Schemas["Channel"], string> = {
+  cloudflare: "Cloudflare",
+  hosting: "the hosting provider",
+  registrar: "the registrar",
+  registry: "the registry",
+  google: "Google Safe Browsing",
+};
+
+const CHANNEL_TITLES: Record<Schemas["Channel"], string> = {
+  cloudflare: "Cloudflare",
+  hosting: "Host",
+  registrar: "Registrar",
+  registry: "Registry",
+  google: "Google",
+};
+
+/**
+ * The takedown clock (product.md §9): from the first abuse report to now while the site is up,
+ * or to the first check that found it offline. Null before any report goes out.
+ */
+export function takedownProgress(detail: Detail, now: Date): Progress | null {
+  const report = firstReport(detail);
+  if (!report) return null;
+  const reportedAt = report.sent_at!;
+  const start = Date.parse(reportedAt);
+  const reportedTo = REPORTED_TO[report.channel];
+  const offline = detail.timeline.find(
+    (event) => event.type === "offline_detected" && Date.parse(event.at) >= start,
+  );
+  const closed = detail.threat.status === "taken_down";
+  if (offline && (closed || lastReachability(detail)?.type === "offline_detected")) {
+    return {
+      kind: "offline",
+      reportedAt,
+      reportedTo,
+      hours: (Date.parse(offline.at) - start) / HOUR,
+      offlineAt: offline.at,
+      takenDownAt: detail.timeline.find((event) => event.type === "taken_down")?.at ?? null,
+    };
+  }
+  if (detail.threat.status !== "notice_sent" && detail.threat.status !== "active") return null;
+  const elapsed = Math.max(0, (now.getTime() - start) / HOUR);
+  const steps = detail.next_steps;
+  const end = steps.escalation_at ? Date.parse(steps.escalation_at) : null;
+  const escalation =
+    steps.escalation_at && end !== null && end > start
+      ? {
+          at: steps.escalation_at,
+          label: steps.escalation_channel
+            ? `${CHANNEL_TITLES[steps.escalation_channel]} escalation`
+            : "Escalation",
+          target: steps.escalation_channel
+            ? escalationTarget(steps.escalation_channel, detail)
+            : null,
+        }
+      : null;
+  const position =
+    escalation && end !== null
+      ? Math.min(1, Math.max(0, (now.getTime() - start) / (end - start)))
+      : null;
+  return { kind: "open", reportedAt, reportedTo, elapsed, escalation, position };
 }
 
 // --- the timeline ----------------------------------------------------------------------------
@@ -162,7 +332,7 @@ function eventStep(event: Event, detail: Detail): Omit<Step, "id" | "at"> | null
       return {
         title: "Verified",
         text: review
-          ? `Classified as ${article(categoryLabel(review.category))} with ${review.confidence.toFixed(2)} confidence.`
+          ? `Classified as ${article(categoryLabel(review.category))} with ${percent(review.confidence)} confidence.`
           : "Confirmed as a threat to your brand.",
         tone: "done",
       };
@@ -326,7 +496,7 @@ export function timelineSteps(detail: Detail, timeZone: string): Step[] {
 
 // --- notices ---------------------------------------------------------------------------------
 
-export type NoticeTone = "neutral" | "waiting" | "success" | "danger" | "scheduled";
+export type NoticeTone = IndicatorTone;
 
 export type NoticeRow = {
   id: string;
@@ -354,7 +524,7 @@ function noticeTitle(channel: Schemas["Channel"], detail: Detail): string {
   const infra = detail.infrastructure;
   switch (channel) {
     case "cloudflare":
-      return "Cloudflare abuse report";
+      return "Cloudflare";
     case "hosting": {
       const host = infra.origin_host ?? infra.hosting;
       return host ? `${shortOrg(host)} abuse desk` : "Hosting provider";
@@ -369,11 +539,11 @@ function noticeTitle(channel: Schemas["Channel"], detail: Detail): string {
 }
 
 const NOTICE_STATUS: Record<Schemas["NoticeStatus"], [string, NoticeTone]> = {
-  sent: ["Awaiting reply", "waiting"],
-  acknowledged: ["Received", "neutral"],
-  resolved: ["Resolved", "success"],
-  rejected: ["Declined", "danger"],
-  retracted: ["Withdrawn", "neutral"],
+  sent: ["Awaiting reply", "warning"],
+  acknowledged: ["Acknowledged", "done"],
+  resolved: ["Resolved", "good"],
+  rejected: ["Declined", "critical"],
+  retracted: ["Withdrawn", "done"],
   draft: ["Being prepared", "scheduled"],
   queued: ["Being prepared", "scheduled"],
   blocked: ["Being prepared", "scheduled"],
@@ -407,7 +577,7 @@ export function noticeRows(detail: Detail, timeZone: string): NoticeRow[] {
       title: steps.escalation_channel
         ? noticeTitle(steps.escalation_channel, detail)
         : "Kalkan team review",
-      subtitle: `Escalation · ${dayTime(steps.escalation_at, timeZone)}`,
+      subtitle: `Escalation · ${dayTime(steps.escalation_at, timeZone)}, only if still online`,
       status: "Scheduled",
       tone: "scheduled",
     });
@@ -432,7 +602,7 @@ export function ruleNote(detail: Detail): string | null {
   switch (rule.outcome) {
     case "approve":
       return rule.rule === "auto_approve"
-        ? "Both reviews and the rule checks agreed, so the notice went out automatically under the phishing policy."
+        ? "Both reviews and the rule checks agreed, so the notice went out automatically under your phishing policy."
         : "The Kalkan team approved the notices after checking the evidence.";
     case "confirm":
     case "verify":
@@ -445,12 +615,20 @@ export function ruleNote(detail: Detail): string | null {
   }
 }
 
-export function rulePassed(detail: Detail): string {
-  const outcome = detail.ai_review.rule?.outcome;
-  if (!outcome) return "Pending";
-  return outcome === "approve"
-    ? "Passed"
-    : outcome === "dismiss"
-      ? "Not a threat"
-      : "Sent to review";
+/** What the rule checks decided, in words ("Approved automatically"); not a pass mark. */
+export function ruleOutcome(detail: Detail): string {
+  const rule = detail.ai_review.rule;
+  if (!rule) return "Pending";
+  switch (rule.outcome) {
+    case "approve":
+      return rule.rule === "auto_approve" ? "Approved automatically" : "Approved by the team";
+    case "confirm":
+    case "verify":
+    case "review":
+      return "Sent to the Kalkan team";
+    case "watch":
+      return "Watch, do not report";
+    case "dismiss":
+      return "Not a threat";
+  }
 }

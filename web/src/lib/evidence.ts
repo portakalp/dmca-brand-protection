@@ -72,13 +72,29 @@ export function similarity(detail: Schemas["ThreatDetail"]): number | null {
   return typeof value === "number" ? Math.round(value * 100) : null;
 }
 
-const RADIUS = 54;
-export const RING_CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+const FILE_LABELS: Record<Schemas["ArtifactKind"], string> = {
+  screenshot: "screenshot",
+  screenshot_full: "full-page screenshot",
+  html: "Page source",
+  har: "Network log",
+  rdap: "Registration record",
+  dns: "DNS records",
+  tls: "Certificate",
+  favicon: "Site icon",
+};
 
-/** The ring's stroke-dasharray for a percentage: the arc, then the whole circle. */
-export function ringDash(percent: number): string {
-  const arc = (Math.min(100, Math.max(0, percent)) / 100) * RING_CIRCUMFERENCE;
-  return `${arc.toFixed(2)} ${RING_CIRCUMFERENCE.toFixed(2)}`;
+/** "Desktop screenshot", "Page source": what a file of the package is. */
+export function fileLabel(file: File): string {
+  const label = FILE_LABELS[file.kind];
+  if (file.kind !== "screenshot" && file.kind !== "screenshot_full") return label;
+  const profile =
+    file.profile === "mobile" ? "Mobile" : file.profile === "desktop" ? "Desktop" : "Page";
+  return `${profile} ${label}`;
+}
+
+/** "3f9a62d1c07be44a19e8f3c2…0e7bc21e": a hash's head and tail; the full one goes in a title. */
+export function shortHash(hash: string, head = 24, tail = 8): string {
+  return hash.length <= head + tail + 1 ? hash : `${hash.slice(0, head)}…${hash.slice(-tail)}`;
 }
 
 /**

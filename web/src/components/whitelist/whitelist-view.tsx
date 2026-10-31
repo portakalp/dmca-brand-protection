@@ -6,10 +6,9 @@ import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/shell/page-header";
 import { usePanel } from "@/components/shell/panel";
 import { SimpleTable, Td, Th, Tr } from "@/components/simple-table";
-import { Card, EmptyState, ErrorState } from "@/components/states";
+import { Card, EmptyState, ErrorState, LoadingState, PanelHeader } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { accessOf } from "@/lib/access";
 import type { Schemas } from "@/lib/api/client";
 import { useWhitelist } from "@/lib/api/queries";
@@ -22,7 +21,7 @@ const SOURCE_LABELS: Record<Schemas["WhitelistSource"], string> = {
   manual: "Added by hand",
   csv: "CSV import",
   onboarding: "Onboarding",
-  this_is_ours: "This is our site",
+  this_is_ours: "Marked as ours",
 };
 
 export function WhitelistView() {
@@ -32,6 +31,7 @@ export function WhitelistView() {
   const [query, setQuery] = useState("");
   const brands = new Map(me.brands.map((brand) => [brand.id, brand.name]));
   const showBrand = me.brands.length > 1;
+  const writes = access.whitelist !== "hidden";
 
   const entries = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -43,18 +43,49 @@ export function WhitelistView() {
       : all;
   }, [whitelist.data, query]);
 
+  const thisMonth = useMemo(() => {
+    const month = todayIn(timeZone).slice(0, 7);
+    return (whitelist.data ?? []).filter(
+      (entry) => todayIn(timeZone, new Date(entry.created_at)).slice(0, 7) === month,
+    ).length;
+  }, [whitelist.data, timeZone]);
+
   return (
     <>
       <PageHeader
         title="Whitelist"
-        subtitle="Domains Kalkan never reports. Each entry covers the domain and its subdomains."
+        subtitle="Your own domains and partners. Kalkan never reports these or their subdomains."
+        actions={
+          <>
+            {access.owner ? (
+              <Button asChild variant="outline">
+                <a href="/api/v1/whitelist/export" download>
+                  <Download aria-hidden="true" />
+                  Export CSV
+                </a>
+              </Button>
+            ) : null}
+            <ImportCsv mode={access.whitelist} />
+            <AddEntry mode={access.whitelist} />
+          </>
+        }
       />
-      <Card aria-label="Whitelist" className="flex flex-col overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 border-b border-card-border px-5 py-4">
-          <div className="relative min-w-0 flex-[1_1_220px]">
+      <Card aria-labelledby="whitelist-title" className="flex flex-col overflow-hidden">
+        <PanelHeader
+          id="whitelist-title"
+          title="Listed domains"
+          description={
+            whitelist.data
+              ? `Each entry covers the domain and all its subdomains. ${count(thisMonth)} added this month.`
+              : "Each entry covers the domain and all its subdomains."
+          }
+        />
+        <div className="flex px-5 pt-4 pb-4 max-sm:px-4">
+          <div className="relative min-w-0 flex-[0_1_360px] max-sm:flex-1">
             <Search
               aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-text-tertiary"
+              strokeWidth={1.5}
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-text-3"
             />
             <Input
               type="search"
@@ -62,45 +93,27 @@ export function WhitelistView() {
               placeholder="Search domains and notes"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              className="min-h-10 rounded-control border-control-border bg-panel pl-9 text-[13.5px] shadow-xs"
+              className="pl-9"
             />
-          </div>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            {access.owner ? (
-              <Button asChild variant="control" size="control">
-                <a
-                  href="/api/v1/whitelist/export"
-                  download
-                  className="text-text no-underline hover:text-text hover:no-underline"
-                >
-                  <Download aria-hidden="true" className="text-text-secondary" />
-                  Export CSV
-                </a>
-              </Button>
-            ) : null}
-            <ImportCsv mode={access.whitelist} />
-            <AddEntry mode={access.whitelist} />
           </div>
         </div>
 
         {whitelist.isPending ? (
-          <div
-            aria-busy="true"
-            aria-label="Loading the whitelist"
-            className="flex flex-col gap-2 p-5"
-          >
-            {Array.from({ length: 6 }, (_, index) => (
-              <Skeleton key={index} className="h-11" />
-            ))}
-          </div>
+          <LoadingState rows={6} label="Loading the whitelist" className="border-t border-border" />
         ) : whitelist.isError ? (
-          <ErrorState error={whitelist.error} onRetry={() => whitelist.refetch()} />
+          <ErrorState
+            error={whitelist.error}
+            onRetry={() => whitelist.refetch()}
+            className="border-t border-border"
+          />
         ) : whitelist.data.length === 0 ? (
-          <EmptyState title="Your whitelist is empty">
+          <EmptyState title="Your whitelist is empty" className="border-t border-border">
             Add your official domains, alternate domains and partners so they are never reported.
           </EmptyState>
         ) : entries.length === 0 ? (
-          <EmptyState title="No matches">No domain or note matches “{query.trim()}”.</EmptyState>
+          <EmptyState title="No matches" icon={Search} className="border-t border-border">
+            No domain or note matches “{query.trim()}”.
+          </EmptyState>
         ) : (
           <>
             <SimpleTable caption="Whitelisted domains" minWidth={680}>
@@ -112,8 +125,8 @@ export function WhitelistView() {
                   <Th>Note</Th>
                   <Th>Added by</Th>
                   <Th>Added</Th>
-                  {access.whitelist !== "hidden" ? (
-                    <Th>
+                  {writes ? (
+                    <Th className="w-12">
                       <span className="sr-only">Actions</span>
                     </Th>
                   ) : null}
@@ -122,24 +135,33 @@ export function WhitelistView() {
               <tbody>
                 {entries.map((entry) => (
                   <Tr key={entry.id}>
-                    <Td className="font-mono text-[12.5px] font-medium text-text">
-                      {entry.pattern}
+                    <Td primary className="max-w-[280px]">
+                      <span
+                        title={entry.pattern}
+                        className="block truncate font-mono text-[13.5px] font-medium text-text"
+                      >
+                        {entry.pattern}
+                      </span>
                     </Td>
-                    <Td className="whitespace-nowrap">{WHITELIST_KIND_LABELS[entry.kind]}</Td>
+                    <Td label="Kind" className="whitespace-nowrap">
+                      {WHITELIST_KIND_LABELS[entry.kind]}
+                    </Td>
                     {showBrand ? (
-                      <Td className="whitespace-nowrap">
+                      <Td label="Brand" className="whitespace-nowrap">
                         {entry.brand_id ? (brands.get(entry.brand_id) ?? "—") : "Every brand"}
                       </Td>
                     ) : null}
-                    <Td className="max-w-[260px] truncate">{entry.note ?? "—"}</Td>
-                    <Td className="whitespace-nowrap">
+                    <Td label="Note" className="max-w-[260px] truncate">
+                      {entry.note ?? <span className="text-text-3">—</span>}
+                    </Td>
+                    <Td label="Added by" className="whitespace-nowrap">
                       {entry.created_by ?? SOURCE_LABELS[entry.source]}
                     </Td>
-                    <Td className="tabular whitespace-nowrap">
+                    <Td label="Added" className="tabular whitespace-nowrap">
                       {longDay(todayIn(timeZone, new Date(entry.created_at)))}
                     </Td>
-                    {access.whitelist !== "hidden" ? (
-                      <Td className="w-12 py-1 text-right">
+                    {writes ? (
+                      <Td action className="py-1.5 text-right">
                         <DeleteEntry entry={entry} mode={access.whitelist} />
                       </Td>
                     ) : null}
@@ -147,7 +169,7 @@ export function WhitelistView() {
                 ))}
               </tbody>
             </SimpleTable>
-            <p className="tabular border-t border-card-border px-5 py-3 text-[13px] text-text-secondary">
+            <p className="tabular border-t border-border px-5 py-3 text-[13px] text-text-2 max-sm:px-4">
               {entries.length === whitelist.data.length
                 ? `${count(entries.length)} ${plural(entries.length, "domain", "domains")}`
                 : `${count(entries.length)} of ${count(whitelist.data.length)} domains`}

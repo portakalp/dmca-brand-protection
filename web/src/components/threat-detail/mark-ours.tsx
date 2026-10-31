@@ -37,7 +37,16 @@ type Kind = Schemas["WhitelistKind"];
  * "This is our site" (product.md §11): owners only. The dialog says what happens before anything
  * does; the API adds the whitelist entry and the worker dismisses and retracts.
  */
-export function MarkOurs({ detail, mode }: { detail: Schemas["ThreatDetail"]; mode: WriteMode }) {
+export function MarkOurs({
+  detail,
+  mode,
+  helpId,
+}: {
+  detail: Schemas["ThreatDetail"];
+  mode: WriteMode;
+  /** The id of the line under the actions that says who can use this and why it is off. */
+  helpId?: string;
+}) {
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<Kind>("official");
@@ -83,13 +92,8 @@ export function MarkOurs({ detail, mode }: { detail: Schemas["ThreatDetail"]; mo
       }}
     >
       <DialogTrigger asChild>
-        <Button
-          variant="control"
-          size="control"
-          disabled={mode === "disabled"}
-          className="min-h-10 pr-3.5 pl-3"
-        >
-          <CircleCheck aria-hidden="true" className="text-text-secondary" />
+        <Button variant="outline" disabled={mode === "disabled"} aria-describedby={helpId}>
+          <CircleCheck aria-hidden="true" className="text-text-2" />
           This is our site
         </Button>
       </DialogTrigger>
@@ -97,7 +101,7 @@ export function MarkOurs({ detail, mode }: { detail: Schemas["ThreatDetail"]; mo
         <DialogHeader>
           <DialogTitle>Is {domain} your site?</DialogTitle>
           <DialogDescription asChild>
-            <div className="flex flex-col gap-2 text-[13.5px] text-text-secondary">
+            <div className="flex flex-col gap-2 text-[13.5px] text-text-2">
               <p>If you confirm:</p>
               <ul className="ml-4 list-disc space-y-1">
                 <li>
@@ -128,7 +132,7 @@ export function MarkOurs({ detail, mode }: { detail: Schemas["ThreatDetail"]; mo
               What is it?
             </Label>
             <Select value={kind} onValueChange={(value) => setKind(value as Kind)}>
-              <SelectTrigger id={kindId} className="min-h-10 w-full rounded-control">
+              <SelectTrigger id={kindId} className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -142,7 +146,7 @@ export function MarkOurs({ detail, mode }: { detail: Schemas["ThreatDetail"]; mo
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={noteId} className="text-[13px] font-medium">
-              Note <span className="font-normal text-text-tertiary">(optional)</span>
+              Note <span className="font-normal text-text-3">(optional)</span>
             </Label>
             <Textarea
               id={noteId}
@@ -154,10 +158,10 @@ export function MarkOurs({ detail, mode }: { detail: Schemas["ThreatDetail"]; mo
             />
           </div>
           <DialogFooter>
-            <Button type="button" variant="control" size="control" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" size="control" disabled={mark.isPending}>
+            <Button type="submit" disabled={mark.isPending}>
               {mark.isPending ? "Saving…" : "Yes, it's our site"}
             </Button>
           </DialogFooter>
