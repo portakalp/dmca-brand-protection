@@ -1,0 +1,64 @@
+# Form fields and button texts of the browser stage's form inventory (architecture.md §10, §12).
+# The browser adds a hint to every input (`kind`) and button (`intent`) of meta.json; the signals
+# (form_password, form_card, form_iban, form_phone, deposit_cta) read the same file.
+#
+# Matching ignores case and accents (ş = s, ı = i, ł = l, й = и) and starts at a word start, so
+# inflected forms match too (`wpłać` matches `wpłacić`, `пополнить` matches `пополнить счёт`).
+# Extend the lists when real-world pages show new patterns; tests cover the fixture pages.
+
+# Input kinds, checked in this order; the first match wins.
+#   types: the input's type attribute
+#   autocomplete: tokens of the autocomplete attribute
+#   words: in the name, id, placeholder, label, aria-label or title
+#   placeholders: regular expressions on the placeholder (after the same normalization)
+fields:
+  password:
+    types: [password]
+    autocomplete: [current-password, new-password]
+    words: [password, passwd, pwd, şifre, parola, hasło, пароль, passwort, kennwort]
+  card_cvv:
+    autocomplete: [cc-csc]
+    words: [cvv, cvc, cvv2, cvc2, csc, security code, card code, güvenlik kodu, kod cvv, код cvv]
+  card_expiry:
+    autocomplete: [cc-exp, cc-exp-month, cc-exp-year]
+    words: [expiry, expiration, exp date, card exp, valid thru, mm/yy, son kullanma, data ważności,
+            срок действия, gültig bis, ablaufdatum]
+  # Before card_number: an IBAN placeholder also holds four groups of four digits.
+  iban:
+    words: [iban]
+    placeholders: ['\b[a-z]{2}\d{2}(?:[ ]?[a-z0-9]{4}){3,}']
+  card_number:
+    autocomplete: [cc-number]
+    words: [card number, cardnumber, card no, card num, ccnum, cc number, ccnumber, credit card,
+            debit card, kart numarası, kart no, kredi kartı, numer karty, номер карты, kartennummer]
+    placeholders: ['\b\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{4}\b']
+  otp:
+    autocomplete: [one-time-code]
+    words: [otp, one-time, one time code, sms code, verification code, doğrulama kodu, onay kodu,
+            kod sms, kod weryfikacyjny, код из смс, код подтверждения, bestätigungscode]
+  phone:
+    types: [tel]
+    autocomplete: [tel, tel-national, tel-local]
+    words: [phone, telephone, mobile number, gsm, telefon, cep telefonu, numer telefonu, телефон,
+            handynummer]
+  email:
+    types: [email]
+    autocomplete: [email]
+    words: [email, e-mail, e-posta, eposta, adres e-mail, почта]
+  username:
+    autocomplete: [username]
+    words: [username, user name, login, user id, kullanıcı adı, nazwa użytkownika, логин,
+            benutzername]
+  amount:
+    words: [amount, deposit amount, tutar, miktar, kwota, сумма, betrag]
+
+# Button and link intents, checked in this order on the visible text, value, aria-label and
+# title; the first match wins.
+buttons:
+  deposit: [deposit, para yatır, yatır, yatırım yap, wpłać, wpłata, doładuj, внести, пополнить,
+            депозит, einzahlen, einzahlung, top up, add funds]
+  login: [login, log in, sign in, signin, giriş, oturum aç, zaloguj, logowanie, войти, вход,
+          anmelden, einloggen]
+  register: [register, sign up, signup, join now, open account, kayıt, kaydol, üye ol,
+             zarejestruj, rejestracja, załóż konto, регистрация, зарегистрироваться,
+             registrieren, konto erstellen]

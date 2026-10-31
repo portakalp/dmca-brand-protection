@@ -1,0 +1,514 @@
+{
+  "version": 1,
+  "generated_at": "2026-11-10T09:00:00Z",
+  "case": {
+    "id": "01a16b95-05db-7c41-9472-1ecb9533c484",
+    "number": "KLK-000001",
+    "state": "detected",
+    "customer_id": "01a16b95-0425-74e2-8385-415af82e8659",
+    "brand_id": "01a16b95-0427-7893-a0d7-dc5e112a4e1c",
+    "first_seen_at": "2026-11-10T09:00:00Z"
+  },
+  "brand": {
+    "id": "01a16b95-0427-7893-a0d7-dc5e112a4e1c",
+    "name": "Mintera Bank",
+    "keywords": [
+      "mintera"
+    ],
+    "target_markets": [],
+    "languages": [],
+    "official_domains": [
+      {
+        "domain": "mintera.test",
+        "kind": "primary"
+      }
+    ]
+  },
+  "domain": {
+    "name": "mintera-login.test",
+    "unicode_name": "mintera-login.test",
+    "registered_domain": "mintera-login.test",
+    "tld": "test",
+    "registrar": null,
+    "registrar_iana_id": null,
+    "registered_at": "2026-11-05T06:00:00Z",
+    "age_days": 5,
+    "nameservers": [],
+    "ips": [],
+    "is_cloudflare": false,
+    "asn": null,
+    "hosting_org": null,
+    "hosting_country": null,
+    "origin_ip": null,
+    "origin_org": null,
+    "origin_country": null,
+    "webrisk_threat_types": [
+      "SOCIAL_ENGINEERING"
+    ]
+  },
+  "match": {
+    "score": 90,
+    "reasons": [
+      "keyword"
+    ],
+    "first_matched_at": "2026-11-10T09:00:00Z"
+  },
+  "scans": [
+    {
+      "id": "01a16b95-05df-79b2-8dec-e6565b307656",
+      "stage": "http",
+      "profile": null,
+      "outcome": "ok",
+      "started_at": "2026-11-10T09:00:00Z",
+      "finished_at": null,
+      "proxy_country": null,
+      "http_status": null,
+      "final_url": "https://mintera-login.test/",
+      "redirect_chain": [],
+      "title": null,
+      "text_excerpt": "",
+      "forms": [],
+      "buttons": [],
+      "screenshot_artifact_id": null,
+      "signals": {
+        "favicon_match": {
+          "value": true,
+          "detail": {
+            "dhash": "0000000000000000",
+            "phash": "8000000000000000"
+          }
+        }
+      }
+    },
+    {
+      "id": "01a16b95-0670-7733-91a1-7f90890c8387",
+      "stage": "browser",
+      "profile": "desktop",
+      "outcome": "ok",
+      "started_at": "2026-11-10T09:05:00Z",
+      "finished_at": "2026-11-10T09:06:00Z",
+      "proxy_country": null,
+      "http_status": 200,
+      "final_url": "https://mintera-login.test/",
+      "redirect_chain": [],
+      "title": "Mintera Bank | Login",
+      "text_excerpt": "Mintera Bank Accounts Cards Loans Business Verify your card to keep your account active. Sign in to Mintera Bank E-mail Password Card number Top up and sign in Mintera Bank. Deposits are protected by the guarantee fund.",
+      "forms": [
+        {
+          "action": "https://mintera-login.test/login",
+          "method": "post",
+          "frame_url": null,
+          "inputs": [
+            {
+              "type": "email",
+              "name": "email",
+              "id": "",
+              "placeholder": "",
+              "autocomplete": "",
+              "inputmode": "",
+              "maxlength": null,
+              "label": "E-mail",
+              "visible": true,
+              "kind": ""
+            },
+            {
+              "type": "password",
+              "name": "password",
+              "id": "",
+              "placeholder": "",
+              "autocomplete": "",
+              "inputmode": "",
+              "maxlength": null,
+              "label": "Password",
+              "visible": true,
+              "kind": ""
+            },
+            {
+              "type": "text",
+              "name": "card",
+              "id": "",
+              "placeholder": "",
+              "autocomplete": "",
+              "inputmode": "",
+              "maxlength": null,
+              "label": "Card number",
+              "visible": true,
+              "kind": ""
+            }
+          ],
+          "buttons": [
+            {
+              "text": "Top up and sign in",
+              "type": "submit",
+              "target": null,
+              "visible": true,
+              "intent": ""
+            }
+          ]
+        }
+      ],
+      "buttons": [],
+      "screenshot_artifact_id": "01a16b95-0678-71d1-9dbc-2403d7560090",
+      "signals": {
+        "brand_in_text": {
+          "value": true,
+          "detail": {}
+        },
+        "brand_in_title": {
+          "value": true,
+          "detail": {}
+        },
+        "deposit_cta": {
+          "value": true,
+          "detail": {
+            "texts": [
+              "Top up and sign in"
+            ]
+          }
+        },
+        "external_form_action": {
+          "value": false,
+          "detail": {
+            "hosts": []
+          }
+        },
+        "form_card": {
+          "value": true,
+          "detail": {
+            "kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            },
+            "visible_kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            }
+          }
+        },
+        "form_iban": {
+          "value": false,
+          "detail": {
+            "kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            },
+            "visible_kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            }
+          }
+        },
+        "form_password": {
+          "value": true,
+          "detail": {
+            "kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            },
+            "visible_kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            }
+          }
+        },
+        "form_phone": {
+          "value": false,
+          "detail": {
+            "kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            },
+            "visible_kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            }
+          }
+        },
+        "redirects_to_official": {
+          "value": false,
+          "detail": {
+            "host": "mintera-login.test"
+          }
+        }
+      }
+    },
+    {
+      "id": "01a16b95-0679-7a52-80fe-7bd66830f958",
+      "stage": "browser",
+      "profile": "mobile",
+      "outcome": "ok",
+      "started_at": "2026-11-10T09:05:00Z",
+      "finished_at": "2026-11-10T09:06:00Z",
+      "proxy_country": null,
+      "http_status": 200,
+      "final_url": "https://mintera-login.test/",
+      "redirect_chain": [],
+      "title": "Mintera Bank | Login",
+      "text_excerpt": "Mintera Bank Accounts Cards Loans Business Verify your card to keep your account active. Sign in to Mintera Bank E-mail Password Card number Top up and sign in Mintera Bank. Deposits are protected by the guarantee fund.",
+      "forms": [
+        {
+          "action": "https://mintera-login.test/login",
+          "method": "post",
+          "frame_url": null,
+          "inputs": [
+            {
+              "type": "email",
+              "name": "email",
+              "id": "",
+              "placeholder": "",
+              "autocomplete": "",
+              "inputmode": "",
+              "maxlength": null,
+              "label": "E-mail",
+              "visible": true,
+              "kind": ""
+            },
+            {
+              "type": "password",
+              "name": "password",
+              "id": "",
+              "placeholder": "",
+              "autocomplete": "",
+              "inputmode": "",
+              "maxlength": null,
+              "label": "Password",
+              "visible": true,
+              "kind": ""
+            },
+            {
+              "type": "text",
+              "name": "card",
+              "id": "",
+              "placeholder": "",
+              "autocomplete": "",
+              "inputmode": "",
+              "maxlength": null,
+              "label": "Card number",
+              "visible": true,
+              "kind": ""
+            }
+          ],
+          "buttons": [
+            {
+              "text": "Top up and sign in",
+              "type": "submit",
+              "target": null,
+              "visible": true,
+              "intent": ""
+            }
+          ]
+        }
+      ],
+      "buttons": [],
+      "screenshot_artifact_id": "01a16b95-067d-7051-8c4f-5cfd514961d5",
+      "signals": {
+        "brand_in_text": {
+          "value": true,
+          "detail": {}
+        },
+        "brand_in_title": {
+          "value": true,
+          "detail": {}
+        },
+        "deposit_cta": {
+          "value": true,
+          "detail": {
+            "texts": [
+              "Top up and sign in"
+            ]
+          }
+        },
+        "external_form_action": {
+          "value": false,
+          "detail": {
+            "hosts": []
+          }
+        },
+        "form_card": {
+          "value": true,
+          "detail": {
+            "kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            },
+            "visible_kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            }
+          }
+        },
+        "form_iban": {
+          "value": false,
+          "detail": {
+            "kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            },
+            "visible_kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            }
+          }
+        },
+        "form_password": {
+          "value": true,
+          "detail": {
+            "kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            },
+            "visible_kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            }
+          }
+        },
+        "form_phone": {
+          "value": false,
+          "detail": {
+            "kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            },
+            "visible_kinds": {
+              "email": 1,
+              "password": 1,
+              "card_number": 1
+            }
+          }
+        },
+        "redirects_to_official": {
+          "value": false,
+          "detail": {
+            "host": "mintera-login.test"
+          }
+        }
+      }
+    }
+  ],
+  "signals": {
+    "cloaking_suspected": {
+      "value": false,
+      "detail": {
+        "overlap": 1.0,
+        "brand_mobile": true,
+        "brand_desktop": true
+      }
+    },
+    "domain_age_days": {
+      "value": 5,
+      "detail": {
+        "registered_at": "2026-11-05T06:00:00+00:00"
+      }
+    },
+    "favicon_phash_distance": {
+      "value": 0,
+      "detail": {
+        "scan_id": "01a16b95-05df-79b2-8dec-e6565b307656",
+        "reference_asset_id": "01a16b95-05c5-7e01-b2b6-a978481f95f4"
+      }
+    },
+    "phash_distance_desktop": {
+      "value": 6,
+      "detail": {
+        "scan_id": "01a16b95-0670-7733-91a1-7f90890c8387",
+        "dhash_distance": 5,
+        "reference_asset_id": "01a16b95-05c5-7e01-b2b6-a951499ad091"
+      }
+    },
+    "phash_distance_mobile": {
+      "value": 0,
+      "detail": {
+        "scan_id": "01a16b95-0679-7a52-80fe-7bd66830f958",
+        "dhash_distance": 1,
+        "reference_asset_id": "01a16b95-05c5-7e01-b2b6-a96443970280"
+      }
+    },
+    "text_similarity": {
+      "value": 84.4,
+      "detail": {
+        "profiles": {
+          "mobile": {
+            "ratio": 84.4,
+            "reference_asset_id": "01a16b95-05c5-7e01-b2b6-a96443970280"
+          },
+          "desktop": {
+            "ratio": 84.4,
+            "reference_asset_id": "01a16b95-05c5-7e01-b2b6-a951499ad091"
+          }
+        }
+      }
+    },
+    "visual_similarity": {
+      "value": 1.0,
+      "detail": {
+        "profiles": {
+          "mobile": {
+            "scan_id": "01a16b95-0679-7a52-80fe-7bd66830f958",
+            "distance": 0,
+            "dhash_distance": 1,
+            "reference_asset_id": "01a16b95-05c5-7e01-b2b6-a96443970280"
+          },
+          "desktop": {
+            "scan_id": "01a16b95-0670-7733-91a1-7f90890c8387",
+            "distance": 6,
+            "dhash_distance": 5,
+            "reference_asset_id": "01a16b95-05c5-7e01-b2b6-a951499ad091"
+          }
+        }
+      }
+    },
+    "webrisk_listed": {
+      "value": true,
+      "detail": {
+        "threat_types": [
+          "SOCIAL_ENGINEERING"
+        ]
+      }
+    }
+  },
+  "references": [
+    {
+      "id": "01a16b95-05c5-7e01-b2b6-a978481f95f4",
+      "kind": "favicon",
+      "captured_at": null,
+      "source_url": null,
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "phash": "8000000000000000",
+      "anthropic_file_id": null
+    },
+    {
+      "id": "01a16b95-05c5-7e01-b2b6-a951499ad091",
+      "kind": "reference_desktop",
+      "captured_at": "2026-11-09T09:00:00Z",
+      "source_url": "https://mintera.test/",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "phash": "e1e18c9ce36f6a60",
+      "anthropic_file_id": null
+    },
+    {
+      "id": "01a16b95-05c5-7e01-b2b6-a96443970280",
+      "kind": "reference_mobile",
+      "captured_at": "2026-11-09T09:00:00Z",
+      "source_url": "https://mintera.test/",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "phash": "c1957a6eb1c0c13f",
+      "anthropic_file_id": null
+    }
+  ]
+}

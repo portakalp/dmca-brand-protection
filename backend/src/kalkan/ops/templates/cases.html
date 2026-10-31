@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Cases · Kalkan ops{% endblock %}
+{% block content %}
+<h1>Cases</h1>
+<form method="get" action="/cases" class="filters" hx-get="/cases" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-push-url="true" hx-trigger="input changed delay:300ms from:input, change from:select">
+  <input type="search" name="q" value="{{ q }}" placeholder="Domain or case number" autofocus>
+  <select name="customer">
+    <option value="">All customers</option>
+    {% for slug, name in customers %}<option value="{{ slug }}"{% if slug == customer %} selected{% endif %}>{{ name }}</option>{% endfor %}
+  </select>
+  <select name="state">
+    <option value="">Any state</option>
+    {% for item in states %}<option value="{{ item.value }}"{% if item.value == state %} selected{% endif %}>{{ item.value }}</option>{% endfor %}
+  </select>
+  <button type="submit">Search</button>
+</form>
+<div id="results">
+  <table>
+    <thead><tr><th>Number</th><th>Domain</th><th>Customer</th><th>Brand</th><th>State</th><th>Label</th><th>First seen</th><th>Last action</th></tr></thead>
+    <tbody>
+    {% for case, domain, customer_name, brand, label in rows %}
+      <tr>
+        <td><a href="/cases/{{ case.id }}">{{ case.number }}</a></td>
+        <td class="mono">{{ domain }}</td>
+        <td>{{ customer_name }}</td>
+        <td>{{ brand }}</td>
+        <td><span class="pill state-{{ case.state.value }}">{{ case.state.value }}</span></td>
+        <td>{{ label.value if label else "—" }}</td>
+        <td>{{ case.first_seen_at|when }}</td>
+        <td>{{ case.last_action or "—" }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" class="muted">No cases.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if rows|length == limit %}<p class="muted">Showing the newest {{ limit }}; narrow the search.</p>{% endif %}
+</div>
+{% endblock %}

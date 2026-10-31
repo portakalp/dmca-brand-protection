@@ -1,0 +1,31 @@
+# Alertmanager configuration template (architecture.md §23). Alertmanager does not expand
+# variables, so vm/bin/render-alertmanager.sh replaces the ${...} placeholders from the
+# environment and writes alertmanager.yml plus the SMTP password file; on the reference VM
+# vm/bin/load-secrets.sh runs it into /run/kalkan/alertmanager (tmpfs). Without a smarthost, a
+# sender or OPS_ALERT_EMAIL the renderer writes a configuration that drops alerts instead.
+# Any SMTP relay works (a mailbox provider, Amazon SES, Postmark, Mailgun, your own Postfix):
+#   ALERT_SMTP_SMARTHOST    host:port, e.g. smtp.example.com:587 (STARTTLS)
+#   ALERT_SMTP_USERNAME     optional; without it the renderer drops both auth lines below
+#   ALERT_SMTP_PASSWORD     written to the password file, never into this configuration
+#   ALERT_MAIL_FROM         the sender address (falls back to MAIL_FROM)
+#   OPS_ALERT_EMAIL         the recipient
+#   ALERT_SMTP_REQUIRE_TLS  true (default) or false, for a relay on a trusted local network only
+global:
+  smtp_smarthost: '${ALERT_SMTP_SMARTHOST}'
+  smtp_from: '${ALERT_MAIL_FROM}'
+  smtp_auth_username: '${ALERT_SMTP_USERNAME}'
+  smtp_auth_password_file: '${ALERT_SMTP_PASSWORD_FILE}'
+  smtp_require_tls: ${ALERT_SMTP_REQUIRE_TLS}
+
+route:
+  receiver: ops-email
+  group_by: ['alertname']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: ops-email
+    email_configs:
+      - to: '${OPS_ALERT_EMAIL}'
+        send_resolved: true

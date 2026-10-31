@@ -1,0 +1,272 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.12.24"
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+  # Same versions as `make infra-check` (Makefile).
+  TERRAFORM_VERSION: "1.16.5"
+  TFLINT_VERSION: "v0.64.0"
+  TFLINT_SHA256: "cca9d13e2e1d7a2c627af60ff899a3c9b74212899416aeb96ec764d2ef954537" # tflint_linux_amd64.zip
+  SHELLCHECK_IMAGE: "koalaman/shellcheck:v0.11.0"
+  PROMETHEUS_IMAGE: "prom/prometheus:v3.13.4"
+  ALERTMANAGER_IMAGE: "prom/alertmanager:v0.34.1"
+  CADDY_IMAGE: "caddy:2.10.2-alpine"
+  NODE_VERSION: "24"
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # gitleaks scans the whole history
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv sync --locked --directory backend
+      - run: make lint
+      - name: OpenAPI schema is up to date
+        run: |
+          make openapi
+          git diff --exit-code backend/openapi.json || {
+            echo "::error::backend/openapi.json is stale; run make openapi and commit it"
+            exit 1
+          }
+      - name: Whitespace hooks
+        run: uv run --project backend pre-commit run --all-files --show-diff-on-failure
+        env:
+          # ruff and mypy ran in make lint; the gitleaks hook only checks staged changes.
+          SKIP: ruff,ruff-format,mypy,gitleaks
+      - name: gitleaks (full history)
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git --redact --verbose .
+
+  test-unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv sync --locked --directory backend
+      - run: make test-unit
+
+  # Optional: runs only when the workflow is started by hand (Actions > ci > Run workflow).
+  benchmark:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv sync --locked --directory backend
+      - run: make bench
+
+  test-integration:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv sync --locked --directory backend
+      # The browser tests drive Playwright's headless Chromium on the runner (same version as the
+      # worker-browser image), always with its sandbox. Ubuntu 24.04 may let only programs
+      # with an AppArmor profile create the user namespaces the sandbox needs: give the headless
+      # shell one (Chromium's documented fix) instead of turning the restriction off.
+      - name: Chromium for the browser tests
+        working-directory: backend
+        run: |
+          uv run playwright install --with-deps --only-shell chromium
+          if [[ $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null) == 1 ]]; then
+            shell_glob="$HOME/.cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux*/chrome-headless-shell"
+            printf '%s\n' 'abi <abi/4.0>,' 'include <tunables/global>' \
+              "profile playwright-chromium ${shell_glob} flags=(unconfined) {" '  userns,' '}' |
+              sudo tee /etc/apparmor.d/playwright-chromium >/dev/null
+            sudo apparmor_parser -r /etc/apparmor.d/playwright-chromium
+          fi
+      # The infrastructure services start through docker compose, so CI uses the same
+      # Postgres init script as local development.
+      - run: cp .env.example .env
+      - run: make test-integration
+      - name: Service logs
+        if: failure()
+        run: docker compose --env-file .env -f infra/compose/docker-compose.yml logs --no-color
+
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [backend, browser, web]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Build ${{ matrix.image }} image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          file: infra/docker/${{ matrix.image }}.Dockerfile
+          push: false
+          build-args: GIT_SHA=${{ github.sha }}
+          # One cache scope per image, so a later build (or a deploy workflow using the same
+          # scopes) reuses main's layers.
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  # Local validation only: no backend config, no cloud credentials (the GCS backend is skipped).
+  terraform:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive -diff
+      # The committed .terraform.lock.hcl must already cover every provider.
+      - run: terraform init -backend=false -input=false -lockfile=readonly
+      - run: terraform validate -no-color
+      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+          checksums: ${{ env.TFLINT_SHA256 }}
+          cache: true
+          tflint_config_path: infra/terraform/.tflint.hcl
+      - run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # plugin download without the anonymous rate limit
+      - run: tflint --format compact
+
+  web:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      # The API types come from backend/openapi.json (make web-types); never written by hand.
+      - name: API types are up to date
+        run: |
+          npm run types
+          git diff --exit-code src/lib/api/schema.d.ts || {
+            echo "::error::web/src/lib/api/schema.d.ts is stale; run make web-types and commit it"
+            exit 1
+          }
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  edge:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: infra/cloudflare
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: infra/cloudflare/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  vm-files:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Every profile on, so cross-service references of profiled services are checked too.
+      - name: VM compose file
+        run: |
+          compose=(docker compose -f infra/compose/docker-compose.vm.yml)
+          profiles=()
+          while IFS= read -r profile; do
+            profiles+=(--profile "$profile")
+          done < <("${compose[@]}" config --profiles)
+          "${compose[@]}" "${profiles[@]}" config --quiet
+      # The self-host stack (deploy/selfhost) with its sample .env: the base services alone and
+      # with every profile on, then its Caddyfile.
+      - name: Self-host compose file and Caddyfile
+        run: |
+          compose=(docker compose -f deploy/selfhost/docker-compose.yml --env-file deploy/selfhost/.env.example)
+          "${compose[@]}" config --quiet
+          profiles=()
+          while IFS= read -r profile; do
+            profiles+=(--profile "$profile")
+          done < <("${compose[@]}" config --profiles)
+          "${compose[@]}" "${profiles[@]}" config --quiet
+          docker run --rm -v "$PWD/deploy/selfhost/Caddyfile":/etc/caddy/Caddyfile:ro \
+            -e APP_DOMAIN=app.example.com -e EVIDENCE_DOMAIN=evidence.example.com \
+            -e ACME_EMAIL=admin@example.com -e EDGE_SHARED_SECRET=check "$CADDY_IMAGE" \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      # The alert rules, their tests and both Prometheus and Alertmanager configurations.
+      - name: Prometheus rules and configuration
+        run: |
+          docker run --rm -v "$PWD/infra/compose":/c:ro -w /c/vm/prometheus/tests \
+            --entrypoint promtool "$PROMETHEUS_IMAGE" test rules kalkan_test.yml
+          docker run --rm -v "$PWD/infra/compose":/c:ro --entrypoint sh "$PROMETHEUS_IMAGE" -c \
+            'promtool check rules /c/vm/prometheus/rules/*.yml &&
+             promtool check config --syntax-only /c/vm/prometheus/prometheus.yml &&
+             promtool check config --syntax-only /c/monitoring/prometheus.yml'
+          docker run --rm -v "$PWD/deploy/selfhost":/s:ro --entrypoint promtool "$PROMETHEUS_IMAGE" \
+            check config --syntax-only /s/monitoring/prometheus.yml
+          docker run --rm -v "$PWD/infra/compose":/c:ro --entrypoint amtool "$ALERTMANAGER_IMAGE" \
+            check-config /c/monitoring/alertmanager.yml
+      # The VM's Alertmanager template, rendered with sample values (with and without SMTP auth)
+      # by the same POSIX sh renderer, inside the Alertmanager image that runs it.
+      - name: Alertmanager template
+        run: |
+          for user in alerts@example.com ""; do
+            docker run --rm -v "$PWD/infra/compose/vm":/vm:ro --entrypoint sh \
+              -e ALERT_SMTP_SMARTHOST=smtp.example.com:587 -e ALERT_SMTP_USERNAME="$user" \
+              -e ALERT_SMTP_PASSWORD=sample -e ALERT_MAIL_FROM=alerts@example.com \
+              -e OPS_ALERT_EMAIL=ops@example.com "$ALERTMANAGER_IMAGE" -c \
+              'out=$(mktemp -d) &&
+               sh /vm/bin/render-alertmanager.sh /vm/alertmanager/alertmanager.yml.tmpl "$out" &&
+               grep -q "^  smtp_smarthost: .smtp.example.com:587.$" "$out/alertmanager.yml" &&
+               amtool check-config "$out/alertmanager.yml"'
+          done
+      - name: shellcheck
+        run: |
+          find infra deploy -type f -name '*.sh' -not -path '*/node_modules/*' -print0 |
+            xargs -0 docker run --rm -v "$PWD":/mnt:ro -w /mnt "$SHELLCHECK_IMAGE" \
+              --external-sources --source-path=SCRIPTDIR

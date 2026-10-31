@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Replies · Kalkan ops{% endblock %}
+{% block content %}
+<h1>Replies</h1>
+<h2>Unmatched</h2>
+{% for event, mail in unmatched %}
+<section class="card" id="event-{{ event.id }}">
+  <div class="case-line">
+    <span class="mono">{{ mail.from_addr or "unknown sender" }}</span>
+    <span class="muted">{{ event.received_at|when }}</span>
+  </div>
+  <p><strong>{{ mail.subject or "(no subject)" }}</strong></p>
+  <pre class="notice-body">{{ (mail.reply_text or mail.text)|short(2000) }}</pre>
+  <form method="post" action="/replies/{{ event.id }}/link" class="inline">
+    <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+    <label>Case number <input name="number" required maxlength="40" placeholder="KLK-000123"></label>
+    <button type="submit">Link</button>
+  </form>
+</section>
+{% else %}
+<p class="card muted">No unmatched replies.</p>
+{% endfor %}
+<h2>Linked</h2>
+<table>
+  <thead><tr><th>Received</th><th>Case</th><th>From</th><th>Subject</th><th>Class</th><th>Correct</th></tr></thead>
+  <tbody>
+  {% for message, number, notice in linked %}
+    <tr>
+      <td>{{ message.received_at|when }}</td>
+      <td><a href="/cases/{{ message.case_id }}">{{ number }}</a>{% if notice %}<br><span class="muted">{{ notice.channel.value }}{% if notice.dry_run %} · dry run{% endif %}</span>{% endif %}</td>
+      <td class="mono">{{ message.from_addr or "—" }}</td>
+      <td>{{ (message.subject or "")|short(80) }}</td>
+      <td>{% if message.classification %}<strong>{{ message.classification.value.replace("_", " ") }}</strong>{% if message.classification_confidence is not none %} <span class="muted">({{ message.classification_confidence }})</span>{% endif %}{% else %}<span class="muted">waiting</span>{% endif %}</td>
+      <td>
+        <form method="post" action="/messages/{{ message.id }}/classification" class="inline">
+          <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+          <select name="classification">{% for item in classes %}<option value="{{ item.value }}"{% if message.classification == item %} selected{% endif %}>{{ item.value.replace("_", " ") }}</option>{% endfor %}</select>
+          <button type="submit" class="secondary">Save</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">No replies yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

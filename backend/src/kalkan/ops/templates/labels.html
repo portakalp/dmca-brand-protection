@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Labelling · Kalkan ops{% endblock %}
+{% block content %}
+<div class="labels-head">
+  <h1>Labelling</h1>
+  <div class="progress" aria-label="Labelling progress">
+    <progress max="{{ progress.target }}" value="{{ [progress.total, progress.target]|min }}">{{ progress.percent }}%</progress>
+    <span><strong>{{ progress.total }}</strong> / {{ progress.target }} labelled · {{ remaining }} in the queue</span>
+  </div>
+</div>
+<ul class="distribution">
+  {% for key, category in keys.items() %}
+  <li><kbd>{{ key }}</kbd> {{ category.value.replace("_", " ") }} <strong>{{ progress.by_category[category] }}</strong></li>
+  {% endfor %}
+</ul>
+{% if view %}
+<section class="card" id="label-case" data-labelling>
+  <div class="case-line">
+    <a href="/cases/{{ view.case.id }}">{{ view.case.number }}</a>
+    <span class="mono big">{{ view.domain }}</span>
+    <span class="muted">{{ view.customer }} · {{ view.brand }} · {{ view.case.state.value }}</span>
+    <a href="/labels?after={{ view.case.number|urlencode }}" id="skip" class="button secondary"><kbd>N</kbd> Skip</a>
+  </div>
+  {% for profile, shot in view.shots.items() %}{% if shot.title %}<p class="muted">Title ({{ profile.value }}): {{ shot.title|short(140) }}</p>{% endif %}{% endfor %}
+  {% include "_shots.html" %}
+  {% if view.signals %}
+  <ul class="signals">
+    {% for name, profile, value in view.signals %}<li><span>{{ name }}{% if profile %} · {{ profile }}{% endif %}</span> <strong>{{ value if value is not none else "—" }}</strong></li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% include "_label_form.html" %}
+  <p class="muted keys">Keys: <kbd>1</kbd>–<kbd>6</kbd> label and next · <kbd>N</kbd> skip · <kbd>/</kbd> note · <kbd>Esc</kbd> leave the note</p>
+</section>
+{% else %}
+<p class="card muted">The queue is empty: every case with a screenshot has a label.</p>
+{% endif %}
+{% endblock %}

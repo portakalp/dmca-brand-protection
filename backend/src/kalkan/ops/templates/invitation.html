@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Invitation · Kalkan ops{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Invitation for {{ email }}</h1>
+  <p>Send this link to the owner. It is shown only once, works once and expires in 24 hours. The invitation e-mail carries the same link.</p>
+  <p><input class="mono wide" value="{{ link }}" readonly aria-label="Invitation link"></p>
+  <p><a href="/customers/{{ customer_id }}">Back to the customer</a></p>
+</section>
+{% endblock %}

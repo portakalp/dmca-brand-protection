@@ -1,0 +1,2 @@
+LEGAL_REVIEW_REQUIRED
+Bu mesaj yalnızca önceki bildirimimizi geri çeker. {{ brand }} adına hareket etmeye yetkiliyiz.

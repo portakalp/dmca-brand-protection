@@ -1,0 +1,11 @@
+Olgular
+- Bildirilen URL: {{ url }}
+- Alan adı: {{ domain }}{% if domain_unicode %} ({{ domain_unicode }}){% endif %}
+
+- IP adresleri: {{ ips | join(", ") if ips else "çözümlenemedi" }}
+- İlk tespit: {{ first_seen }}
+- Referans numaramız: {{ case_number }}
+- Kanıtlar (ekran görüntüleri, kaydedilen dosyalar ve özetleri): {{ evidence_url }}
+{% for label, digest in hashes %}
+- {{ label }} SHA-256 özeti: {{ digest }}
+{% endfor %}

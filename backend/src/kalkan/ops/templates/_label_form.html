@@ -1,0 +1,13 @@
+<form method="post" action="/labels/{{ view.case.id }}" class="label-form" id="label-form">
+  <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+  <input type="hidden" name="after" value="{{ after or '' }}">
+  <input type="hidden" name="back" value="{{ back or '' }}">
+  <div class="categories">
+    {% for key, category in keys.items() %}
+    <button type="submit" name="category" value="{{ category.value }}" data-key="{{ key }}"{% if view.label and view.label.category == category %} class="chosen"{% endif %}>
+      <kbd>{{ key }}</kbd> {{ category.value.replace("_", " ") }}
+    </button>
+    {% endfor %}
+  </div>
+  <label class="note">Note <kbd>/</kbd> <textarea name="note" rows="2" maxlength="2000" id="label-note">{{ view.label.note if view.label and view.label.note else "" }}</textarea></label>
+</form>

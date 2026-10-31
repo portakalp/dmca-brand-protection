@@ -1,0 +1,34 @@
+// Edge Worker in front of Cloud Run for the optional Google Cloud reference deployment
+// (architecture.md §22; K84). Deployed by hand (README.md). Replace example.com with your
+// domain in the four host lines below.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "kalkan-edge",
+  "main": "src/index.ts",
+  // At or before the workerd bundled with the pinned wrangler; bump deliberately.
+  "compatibility_date": "2026-10-01",
+  // Only the Custom Domains below reach the Worker: every hostname that does gets X-Edge-Auth.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "app.example.com", "custom_domain": true },
+    { "pattern": "evidence.example.com", "custom_domain": true }
+  ],
+  "vars": {
+    // Must name the Custom Domains above (test/config.test.ts checks it).
+    "APP_HOST": "app.example.com",
+    "EVIDENCE_HOST": "evidence.example.com",
+    // Cloud Run URLs, given on every deploy: --var API_ORIGIN:<terraform output api_url>.
+    // Empty means the Worker answers 503 instead of forwarding.
+    "API_ORIGIN": "",
+    "WEB_ORIGIN": ""
+  },
+  // The secret EDGE_SHARED_SECRET is set with `wrangler secret put` and is never in this file.
+  "observability": {
+    "enabled": true,
+    // Invocation logs and traces record request URLs, which carry evidence tokens (/e/<token>).
+    "logs": { "invocation_logs": false },
+    "traces": { "enabled": false }
+  },
+  "send_metrics": false
+}

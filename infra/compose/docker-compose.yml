@@ -1,0 +1,560 @@
+# Local development stack (architecture.md §3). Start with `make up`; the demo with `make demo`.
+# Variables come from the repository's .env (see .env.example); host ports bind to 127.0.0.1.
+# Each application container gets only the settings its process uses.
+#
+# Every published port can be moved with a variable (API_PORT=8000, WEB_PORT=3000, OPS_PORT=8081,
+# MAILPIT_PORT=8025, MAILPIT_SMTP_PORT=2525, POSTGRES_PORT=5432, REDIS_PORT=6379,
+# FAKE_GCS_PORT=4443, FIXTURE_SITES_PORT=18080, DEV_PROXY_PORT=18888, PROMETHEUS_PORT=9090,
+# ALERTMANAGER_PORT=9093). The host tools and tests read their URLs from .env: moving
+# POSTGRES_PORT, REDIS_PORT, FAKE_GCS_PORT or MAILPIT_SMTP_PORT means changing those URLs too.
+#
+# The two networks have fixed subnets, which variables move as well: KALKAN_SUBNET
+# (172.30.0.0/16), FIXTURE_SITES_IP (172.30.255.80, inside KALKAN_SUBNET) and BROWSER_SUBNET
+# (172.29.250.0/24). A second copy of the stack next to this one needs its own
+# COMPOSE_PROJECT_NAME, other ports and other subnets (docs/self-hosting.md); its images are
+# named after the project, so building it leaves this copy's images alone.
+#
+# Profiles: demo (web panel and the demo-setup one-off; `make demo`), browser, ai, ct, monitoring.
+name: kalkan
+
+x-backend: &backend
+  build:
+    context: ../..
+    dockerfile: infra/docker/backend.Dockerfile
+  image: ${COMPOSE_PROJECT_NAME:-kalkan}-backend:local
+  restart: unless-stopped
+
+x-common-env: &common-env
+  ENV: ${ENV:-local}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+
+services:
+  postgres:
+    image: postgres:16.15-trixie
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      DB_OWNER_PASSWORD: ${DB_OWNER_PASSWORD:?set DB_OWNER_PASSWORD in .env}
+      DB_API_PASSWORD: ${DB_API_PASSWORD:?set DB_API_PASSWORD in .env}
+      DB_WORKER_PASSWORD: ${DB_WORKER_PASSWORD:?set DB_WORKER_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - ../../backend/sql:/opt/kalkan/sql:ro
+    healthcheck:
+      # TCP check: the temporary server used during initdb listens only on the socket.
+      test: ["CMD", "pg_isready", "--host=127.0.0.1", "--username=kalkan_owner", "--dbname=kalkan"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  redis:
+    image: redis:7.4.11-bookworm
+    # Redis only carries jobs; state lives in Postgres (architecture.md §2).
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    networks:
+      default: {}
+      browser: {}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  fake-gcs:
+    image: fsouza/fake-gcs-server:1.56.1
+    command: ["-scheme", "http", "-port", "4443", "-external-url", "http://fake-gcs:4443"]
+    ports:
+      - "127.0.0.1:${FAKE_GCS_PORT:-4443}:4443"
+    volumes:
+      - fake-gcs-data:/storage
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4443/storage/v1/b"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mailpit:
+    image: axllent/mailpit:v1.31.4
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+      # SMTP on host port 2525: 1025 is often taken on developer machines (e.g. mail bridges).
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-2525}:1025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # One-off: Alembic upgrade head as kalkan_owner before the application services start (the
+  # image carries the migrations). `make migrate` does the same from the host.
+  migrate:
+    <<: *backend
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      <<: *common-env
+      DATABASE_URL_MIGRATE: postgresql+psycopg://kalkan_owner:${DB_OWNER_PASSWORD}@postgres:5432/kalkan
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *backend
+    command: ["uvicorn", "kalkan.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+    environment:
+      <<: *common-env
+      DATABASE_URL_API: postgresql+psycopg://kalkan_api:${DB_API_PASSWORD}@postgres:5432/kalkan
+      EDGE_SHARED_SECRET: ${EDGE_SHARED_SECRET:-}
+      # The evidence pages stream captured files from the storage emulator (§17).
+      STORAGE_EMULATOR_HOST: http://fake-gcs:4443
+      GCS_EVIDENCE_BUCKET: ${GCS_EVIDENCE_BUCKET:-kalkan-evidence}
+      # Postmark's inbound and bounce webhooks (§16); empty refuses every webhook call.
+      POSTMARK_WEBHOOK_BASIC_AUTH: ${POSTMARK_WEBHOOK_BASIC_AUTH:-}
+      # Sign-in (TOTP), invitations and password resets (§17); e-mail goes to Mailpit.
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?set TOTP_ENCRYPTION_KEY in .env}
+      SMTP_URL: smtp://mailpit:1025
+      MAIL_FROM: ${MAIL_FROM:-abuse-reports@example.test}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:${WEB_PORT:-3000}}
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  worker-default:
+    <<: *backend
+    command: ["python", "-m", "kalkan.workers", "default"]
+    environment:
+      <<: *common-env
+      DATABASE_URL_WORKER: postgresql+psycopg://kalkan_worker:${DB_WORKER_PASSWORD}@postgres:5432/kalkan
+      REDIS_URL: redis://redis:6379/0
+      CASE_PREFIX: ${CASE_PREFIX:-KLK}
+      # Evidence (raw RDAP and DNS answers) goes to the local storage emulator.
+      STORAGE_EMULATOR_HOST: http://fake-gcs:4443
+      GCS_EVIDENCE_BUCKET: ${GCS_EVIDENCE_BUCKET:-kalkan-evidence}
+      GCS_REPORTS_BUCKET: ${GCS_REPORTS_BUCKET:-kalkan-reports}
+      # Web Risk is skipped while the key is empty.
+      WEBRISK_API_KEY: ${WEBRISK_API_KEY:-}
+      # The scanner may reach the local fixture sites, nothing else private (§10).
+      SSRF_ALLOW_CIDRS: ${FIXTURE_SITES_IP:-172.30.255.80}/32
+      # The daily CZDS scan is skipped while the credentials are empty.
+      CZDS_USERNAME: ${CZDS_USERNAME:-}
+      CZDS_PASSWORD: ${CZDS_PASSWORD:-}
+      CZDS_TLDS: ${CZDS_TLDS:-}
+      # Notices (§15): locally only through Mailpit (ENV=local allows SMTP alone).
+      SMTP_URL: smtp://mailpit:1025
+      MAIL_FROM: ${MAIL_FROM:-abuse-reports@example.test}
+      REPLY_DOMAIN: ${REPLY_DOMAIN:-reply.example.test}
+      NOTICES_DRY_RUN: ${NOTICES_DRY_RUN:-true}
+      DRY_RUN_REDIRECT_EMAIL: ${DRY_RUN_REDIRECT_EMAIL:-operator@example.test}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:${WEB_PORT:-3000}}
+      EVIDENCE_BASE_URL: ${EVIDENCE_BASE_URL:-http://localhost:${API_PORT:-8000}}
+      # Hand AI work to worker-ai only when it can run: AI_ENABLED, else on when .env has an
+      # Anthropic key (`make up-ai`). Off: those cases go to review (kalkan.ai.queue). This
+      # service never gets the key itself.
+      AI_ENABLED: ${AI_ENABLED:-${ANTHROPIC_API_KEY:+true}}
+    volumes:
+      # worker-browser's screenshots and HTML; persist_capture reads and deletes them (§10).
+      - artifacts-tmp:/artifacts-tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Dramatiq's Prometheus exporter answers once the worker process has booted.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9191/', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  scheduler:
+    <<: *backend
+    command: ["python", "-m", "kalkan.scheduler"]
+    environment:
+      <<: *common-env
+      DATABASE_URL_WORKER: postgresql+psycopg://kalkan_worker:${DB_WORKER_PASSWORD}@postgres:5432/kalkan
+      REDIS_URL: redis://redis:6379/0
+      # Exported for the AI spend alarms (§23).
+      AI_MONTHLY_BUDGET_USD: ${AI_MONTHLY_BUDGET_USD:-50}
+      ALERT_AI_DAILY_USD: ${ALERT_AI_DAILY_USD:-5}
+      # The reconciler re-queues AI stages; as for worker-default.
+      AI_ENABLED: ${AI_ENABLED:-${ANTHROPIC_API_KEY:+true}}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # The heartbeat job touches this file every minute.
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/kalkan-scheduler.heartbeat') > 150)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
+  # Internal operations panel (architecture.md §19): http://localhost:8081, staff password and
+  # TOTP (`kalkan staff create`). Reads every tenant as kalkan_worker.
+  ops:
+    <<: *backend
+    command: ["uvicorn", "kalkan.ops.main:app", "--host", "0.0.0.0", "--port", "8081", "--no-access-log"]
+    environment:
+      <<: *common-env
+      DATABASE_URL_WORKER: postgresql+psycopg://kalkan_worker:${DB_WORKER_PASSWORD}@postgres:5432/kalkan
+      REDIS_URL: redis://redis:6379/0
+      CASE_PREFIX: ${CASE_PREFIX:-KLK}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?set TOTP_ENCRYPTION_KEY in .env}
+      STORAGE_EMULATOR_HOST: http://fake-gcs:4443
+      GCS_EVIDENCE_BUCKET: ${GCS_EVIDENCE_BUCKET:-kalkan-evidence}
+      GCS_REPORTS_BUCKET: ${GCS_REPORTS_BUCKET:-kalkan-reports}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:${WEB_PORT:-3000}}
+      NOTICES_DRY_RUN: ${NOTICES_DRY_RUN:-true}
+      DRY_RUN_REDIRECT_EMAIL: ${DRY_RUN_REDIRECT_EMAIL:-}
+    ports:
+      - "127.0.0.1:${OPS_PORT:-8081}:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  # The customer panel as a production build (profile demo; `make web-dev` serves it from
+  # source instead). Built and run with API_ORIGIN=http://api:8000: /api/* is rewritten to the
+  # api service, so panel and API share one origin and the session cookie works as in prod.
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        API_ORIGIN: http://api:8000
+    image: ${COMPOSE_PROJECT_NAME:-kalkan}-web:local
+    profiles: ["demo"]
+    restart: unless-stopped
+    environment:
+      # The print page reads the report data from here on the server side.
+      API_ORIGIN: http://api:8000
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:${WEB_PORT:-3000}}
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+    networks:
+      default: {}
+      # worker-browser prints the monthly report from http://web:3000 (REPORT_PRINT_BASE_URL)
+      # without a proxy (reports/printing.py), over the internal print network that only the
+      # two of them join. Trade-off: a compromised Chromium can reach the panel's server
+      # directly, and web:3000 also proxies /api/* to the api (the build-time rewrite above),
+      # so it can call the API as an anonymous client. Routing the print through dev-proxy
+      # instead would mean letting the proxy reach compose services, which is worse; Redis and
+      # dev-proxy stay off this network. Local demo only: deploy/selfhost builds web without
+      # the rewrite.
+      print: {}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 10s
+
+  # One-off of `make demo` (profile demo): seeds Mintera Bank, renews the ops operator
+  # (operator@kalkan.local) and prints every login. Run it with `docker compose run --rm
+  # demo-setup`; `kalkan demo code EMAIL` through the same service prints a TOTP code. The
+  # repository's .local/ is mounted, so the credentials file lands on the host; the container
+  # runs as the host user (HOST_UID/HOST_GID, set by make) to be able to write there.
+  demo-setup:
+    <<: *backend
+    profiles: ["demo"]
+    restart: "no"
+    user: "${HOST_UID:-10001}:${HOST_GID:-10001}"
+    command: ["kalkan", "demo", "setup"]
+    environment:
+      <<: *common-env
+      DATABASE_URL_WORKER: postgresql+psycopg://kalkan_worker:${DB_WORKER_PASSWORD}@postgres:5432/kalkan
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?set TOTP_ENCRYPTION_KEY in .env}
+      CASE_PREFIX: ${CASE_PREFIX:-KLK}
+      STORAGE_EMULATOR_HOST: http://fake-gcs:4443
+      GCS_EVIDENCE_BUCKET: ${GCS_EVIDENCE_BUCKET:-kalkan-evidence}
+      GCS_REPORTS_BUCKET: ${GCS_REPORTS_BUCKET:-kalkan-reports}
+      DEMO_CREDENTIALS_FILE: /local/demo-credentials.json
+    volumes:
+      - ../../.local:/local
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      fake-gcs:
+        condition: service_healthy
+
+  # Fictional sites for the scanning tests (fixtures/sites, architecture.md §25).
+  fixture-sites:
+    image: nginx:1.30.5-alpine
+    volumes:
+      - ../../fixtures/sites:/sites:ro
+      - ../../fixtures/sites/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "127.0.0.1:${FIXTURE_SITES_PORT:-18080}:80"
+    networks:
+      default:
+        ipv4_address: ${FIXTURE_SITES_IP:-172.30.255.80}
+        aliases:
+          - mintera.test
+          - www.mintera.test
+          - mintera-login.test
+          - mintera-parked.test
+          - mintera-empty.test
+          - mintera-redirect.test
+          - mintera-mobile.test
+          - mintera-challenge.test
+          - mintera-verify.test
+          - mintera-review.test
+          - mintera-loop.test
+          - mintera-heavy.test
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null --header 'Host: mintera.test' http://127.0.0.1/ || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  # Local stand-in for the residential proxy (architecture.md §10): PROXY_MAP points here
+  # (http://dev-proxy:8888 in compose, http://127.0.0.1:18888 for tests on the host). It reaches
+  # only the fixture sites (*.test, resolved through the aliases above); dev-proxy/tinyproxy.conf.
+  dev-proxy:
+    image: kalaksi/tinyproxy:1.7@sha256:5a65354cbb5f9c0fdcc8de3d3af8dd1c5ea072b3a1f52e5961a9a5cce6eba227
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./dev-proxy/tinyproxy.conf:/etc/tinyproxy/tinyproxy.conf:ro
+      - ./dev-proxy/filter:/etc/tinyproxy/filter:ro
+    ports:
+      - "127.0.0.1:${DEV_PROXY_PORT:-18888}:8888"
+    networks:
+      default: {}
+      browser: {}
+    healthcheck:
+      # tinyproxy refuses this request (403) and logs it; curl exits 0 once it listens. Checked
+      # every second while starting, then rarely, to keep the request log readable.
+      test: ["CMD", "curl", "-s", "-o", "/dev/null", "http://127.0.0.1:8888/"]
+      start_period: 30s
+      start_interval: 1s
+      interval: 60s
+      timeout: 3s
+      retries: 3
+
+  # Playwright worker (architecture.md §10); off by default because the image is large:
+  # `make up-browser` (or COMPOSE_PROFILES=browser). As on the VM (K6, K82): no database URL, no
+  # cloud credentials, and only the internal browser network (Redis and dev-proxy), so a request
+  # that skips the proxy has nowhere to go.
+  worker-browser:
+    build:
+      context: ../..
+      dockerfile: infra/docker/browser.Dockerfile
+    image: ${COMPOSE_PROJECT_NAME:-kalkan}-browser:local
+    profiles: ["browser"]
+    restart: unless-stopped
+    init: true
+    command: ["python", "-m", "kalkan.workers", "browser"]
+    environment:
+      <<: *common-env
+      REDIS_URL: redis://redis:6379/0
+      # Empty: every capture job is deferred (fail closed). .env.example points PL at dev-proxy.
+      PROXY_MAP: ${PROXY_MAP:-}
+      PROXY_DEFAULT_COUNTRY: ${PROXY_DEFAULT_COUNTRY:-}
+      PROXY_DAILY_GB_LIMIT: ${PROXY_DAILY_GB_LIMIT:-}
+      # The monthly report is printed from the web service (profile demo) over the print
+      # network; APP_BASE_URL (localhost) would be the container itself.
+      REPORT_PRINT_BASE_URL: ${REPORT_PRINT_BASE_URL:-http://web:3000}
+    networks:
+      - browser
+      # web only (profile demo), for the report print.
+      - print
+    volumes:
+      - artifacts-tmp:/artifacts-tmp
+    cap_drop:
+      - ALL
+    # Chromium's sandbox needs user namespaces: the VM's seccomp profile (K6; never --no-sandbox).
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./vm/seccomp-chromium.json
+    depends_on:
+      redis:
+        condition: service_healthy
+      dev-proxy:
+        condition: service_healthy
+    healthcheck:
+      # Dramatiq's Prometheus exporter answers once the worker process has booted.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9191/', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  # Optional (`make up-ai`): Claude calls (architecture.md §13). Real API calls cost money; with
+  # ANTHROPIC_API_KEY empty the worker does not start. AI_MONTHLY_BUDGET_USD caps the spend. A
+  # variable of the same name in your shell wins over .env (compose interpolation).
+  worker-ai:
+    <<: *backend
+    profiles: ["ai"]
+    command: ["python", "-m", "kalkan.workers", "ai"]
+    environment:
+      <<: *common-env
+      DATABASE_URL_WORKER: postgresql+psycopg://kalkan_worker:${DB_WORKER_PASSWORD}@postgres:5432/kalkan
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_EMULATOR_HOST: http://fake-gcs:4443
+      GCS_EVIDENCE_BUCKET: ${GCS_EVIDENCE_BUCKET:-kalkan-evidence}
+      # Without a key the worker stops at start-up (Settings.require_for).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_TRIAGE_MODEL: ${AI_TRIAGE_MODEL:-claude-haiku-5-5}
+      AI_CONFIRM_MODEL: ${AI_CONFIRM_MODEL:-claude-sonnet-5-5}
+      AI_MONTHLY_BUDGET_USD: ${AI_MONTHLY_BUDGET_USD:-50}
+      AI_PRICES: ${AI_PRICES:-}
+      AI_TEXT_MODEL: ${AI_TEXT_MODEL:-claude-sonnet-5-5}
+      # The notice text may name the evidence link's host (§13).
+      EVIDENCE_BASE_URL: ${EVIDENCE_BASE_URL:-http://localhost:${API_PORT:-8000}}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      fake-gcs:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9191/', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  # Optional (`make up-ct`): connects to the public CT logs and streams new certificates.
+  certstream:
+    image: 0rickyy0/certstream-server-go:v1.10.1
+    profiles: ["ct"]
+    restart: unless-stopped
+    volumes:
+      - ./certstream/config.yaml:/app/config/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/example.json || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  ct-consumer:
+    <<: *backend
+    profiles: ["ct"]
+    command: ["python", "-m", "kalkan.discovery.ct"]
+    environment:
+      <<: *common-env
+      DATABASE_URL_WORKER: postgresql+psycopg://kalkan_worker:${DB_WORKER_PASSWORD}@postgres:5432/kalkan
+      REDIS_URL: redis://redis:6379/0
+      CERTSTREAM_URL: ws://certstream:8080/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      certstream:
+        condition: service_healthy
+    healthcheck:
+      # The consumer touches this file every 30 seconds while it runs.
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/kalkan-ct-consumer.heartbeat') > 90)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
+  # Optional (`make up-monitoring`): the VM's alert rules on the local stack; alarm e-mails go to
+  # Mailpit (architecture.md §23, §25). Prometheus http://localhost:9090, Alertmanager :9093.
+  prometheus:
+    image: prom/prometheus:v3.13.4
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=1d
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./vm/prometheus/rules:/etc/prometheus/rules:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --cluster.listen-address=
+    ports:
+      - "127.0.0.1:${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    depends_on:
+      mailpit:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9093/-/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  postgres-data:
+  fake-gcs-data:
+  # Hand-off from worker-browser to worker-default (§10); both images own /artifacts-tmp as 10001.
+  artifacts-tmp:
+
+networks:
+  # A fixed subnet, so the fixture sites have a known address the workers may reach.
+  default:
+    ipam:
+      config:
+        - subnet: ${KALKAN_SUBNET:-172.30.0.0/16}
+  # worker-browser's only network: no route out; Redis and dev-proxy join it (tinyproxy.conf
+  # admits every private range, so moving a subnet needs no change there).
+  browser:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${BROWSER_SUBNET:-172.29.250.0/24}
+  # worker-browser -> web (the monthly report's print page) only; no route out.
+  print:
+    internal: true

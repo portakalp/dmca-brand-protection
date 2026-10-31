@@ -1,0 +1,54 @@
+{
+  "FromName": "Abuse Desk",
+  "MessageStream": "inbound",
+  "From": "noreply@registrar.example",
+  "FromFull": {
+    "Email": "noreply@registrar.example",
+    "Name": "Abuse Desk",
+    "MailboxHash": ""
+  },
+  "To": "\"Case\" <case+{{number}}@reply.example.test>",
+  "ToFull": [
+    {
+      "Email": "case+{{number}}@reply.example.test",
+      "Name": "Case",
+      "MailboxHash": "{{number}}"
+    }
+  ],
+  "Cc": "",
+  "CcFull": [],
+  "Bcc": "",
+  "BccFull": [],
+  "OriginalRecipient": "case+{{number}}@reply.example.test",
+  "Subject": "Ticket #48213 received: [{{number_upper}}] Phishing report",
+  "MessageID": "{{message_id}}",
+  "ReplyTo": "",
+  "MailboxHash": "{{number}}",
+  "Date": "Tue, 8 Dec 2026 10:15:00 +0000",
+  "TextBody": "Thank you for contacting us. Your ticket #48213 has been created. We will respond soon.",
+  "HtmlBody": "<p>Thank you for contacting us. Your ticket #48213 has been created. We will respond soon.</p>",
+  "StrippedTextReply": "",
+  "Tag": "",
+  "Headers": [
+    {
+      "Name": "X-Spam-Status",
+      "Value": "No"
+    },
+    {
+      "Name": "In-Reply-To",
+      "Value": "{{in_reply_to}}"
+    },
+    {
+      "Name": "References",
+      "Value": "{{in_reply_to}}"
+    }
+  ],
+  "Attachments": [
+    {
+      "Name": "ticket.txt",
+      "Content": "dGlja2V0IDEyMzQ=",
+      "ContentType": "text/plain",
+      "ContentLength": 11
+    }
+  ]
+}

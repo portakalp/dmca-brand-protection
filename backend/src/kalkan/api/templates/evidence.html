@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <title>Evidence {{ case.number }}</title>
+  <style>
+    body { font: 15px/1.5 system-ui, sans-serif; margin: 0 auto; max-width: 1100px; padding: 16px; color: #1b1f24; background: #fff; }
+    h1 { font-size: 22px; } h2 { font-size: 17px; margin-top: 28px; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { text-align: left; border-bottom: 1px solid #e3e6ea; padding: 6px 8px; vertical-align: top; }
+    .mono { font-family: ui-monospace, monospace; word-break: break-all; }
+    .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+    figure { margin: 0; } img { max-width: 100%; border: 1px solid #e3e6ea; }
+    .muted { color: #5b6470; }
+  </style>
+</head>
+<body>
+  <h1>Evidence for case {{ case.number }}</h1>
+  <p>Domain <span class="mono">{{ domain.name }}</span>{% if domain.unicode_name and domain.unicode_name != domain.name %} ({{ domain.unicode_name }}){% endif %} · first seen {{ case.first_seen_at.strftime("%Y-%m-%d %H:%M UTC") }}</p>
+  <p class="muted">Captured by an automated browser. The SHA-256 hash of every file is listed below; a downloaded file can be checked against it.</p>
+
+  <h2>Screenshots</h2>
+  <div class="shots">
+    {% for shot in screenshots %}
+    <figure>
+      <figcaption>{{ shot.profile or "page" }} · {{ shot.created_at.strftime("%Y-%m-%d %H:%M UTC") }}</figcaption>
+      <img src="{{ base }}/files/{{ shot.id }}" alt="Screenshot ({{ shot.profile or 'page' }})" loading="lazy">
+    </figure>
+    {% else %}
+    <p class="muted">No screenshot.</p>
+    {% endfor %}
+  </div>
+
+  <h2>Files and hashes</h2>
+  <table>
+    <tr><th>File</th><th>Captured (UTC)</th><th>Size</th><th>SHA-256</th></tr>
+    {% for file in files %}
+    <tr>
+      <td><a href="{{ base }}/files/{{ file.id }}" rel="nofollow">{{ file.kind.value }}{% if file.profile %} · {{ file.profile.value }}{% endif %}</a></td>
+      <td>{{ file.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+      <td>{{ file.bytes }} bytes</td>
+      <td class="mono">{{ file.sha256 }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h2>Registration and hosting</h2>
+  <table>
+    <tr><th>Registrar</th><td>{{ domain.registrar or "unknown" }}{% if domain.registrar_iana_id %} (IANA {{ domain.registrar_iana_id }}){% endif %}</td></tr>
+    <tr><th>Registered</th><td>{{ domain.registered_at.strftime("%Y-%m-%d") if domain.registered_at else "unknown" }}</td></tr>
+    <tr><th>Name servers</th><td class="mono">{{ domain.nameservers | join(", ") or "unknown" }}</td></tr>
+    <tr><th>IP addresses</th><td class="mono">{{ ips | join(", ") or "unknown" }}</td></tr>
+    <tr><th>Hosting</th><td>{{ domain.hosting_org or "unknown" }}{% if domain.hosting_country %} ({{ domain.hosting_country }}){% endif %}{% if domain.asn %} · AS{{ domain.asn }}{% endif %}</td></tr>
+  </table>
+</body>
+</html>

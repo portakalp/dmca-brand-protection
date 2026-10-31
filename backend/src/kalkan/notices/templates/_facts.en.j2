@@ -1,0 +1,11 @@
+Facts
+- Reported URL: {{ url }}
+- Domain: {{ domain }}{% if domain_unicode %} ({{ domain_unicode }}){% endif %}
+
+- IP addresses: {{ ips | join(", ") if ips else "not resolved" }}
+- First seen: {{ first_seen }}
+- Our reference: {{ case_number }}
+- Evidence (screenshots, captured files and their hashes): {{ evidence_url }}
+{% for label, digest in hashes %}
+- SHA-256 of the {{ label }}: {{ digest }}
+{% endfor %}

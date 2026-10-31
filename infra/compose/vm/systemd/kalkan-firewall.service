@@ -1,0 +1,18 @@
+# Egress rules for the browser network and the metadata server (architecture.md §24; K82).
+# Runs before Docker starts, so containers Docker restarts at boot never run without the rules,
+# and again whenever Docker is restarted. Docker requires it: if the rules cannot be applied,
+# Docker does not start (fail closed). Restarting this unit therefore restarts Docker; to re-apply
+# the rules alone, run vm/bin/firewall.sh. Installed by vm/bin/install-units.sh.
+[Unit]
+Description=Kalkan firewall (DOCKER-USER and INPUT rules for the compose networks)
+Before=docker.service
+PartOf=docker.service
+ConditionPathExists=/opt/kalkan/vm/bin/firewall.sh
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/bash /opt/kalkan/vm/bin/firewall.sh
+
+[Install]
+RequiredBy=docker.service

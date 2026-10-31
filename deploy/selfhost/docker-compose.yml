@@ -1,0 +1,564 @@
+# Kalkan on one Linux server with Docker Compose: no cloud account needed (README.md).
+#
+#   cd deploy/selfhost && ./init-env.sh && $EDITOR .env && docker compose up -d --build
+#
+# Images are built from this repository. ENV=prod throughout: secure cookies (HTTPS through
+# Caddy), no test settings (SSRF allow lists, storage emulator), the api's X-Edge-Auth check.
+# Caddy is the only service with public ports (80, 443); the ops panel listens on 127.0.0.1 only
+# (reach it with `ssh -L 8081:127.0.0.1:8081 server`). Objects (evidence, reports) are files in
+# the `objects` volume (STORAGE_BACKEND=filesystem); e-mail goes out through your SMTP server.
+#
+# Optional parts, turned on with COMPOSE_PROFILES in .env (comma-separated):
+#   browser     worker-browser (Chromium) and egress-proxy: screenshots and the monthly PDFs
+#   ai          worker-ai (Claude; needs ANTHROPIC_API_KEY and costs money)
+#   ct          certstream and ct-consumer: new certificates from the public CT logs
+#   monitoring  Prometheus, Alertmanager (alarms by SMTP), Grafana and node-exporter
+# Without ai, cases that would go to the AI go to the review queue (AI_ENABLED, kalkan.ai.queue).
+#
+# Each container gets only the settings its process reads; secrets come from .env (chmod 600).
+name: kalkan-selfhost
+
+x-logging: &logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-backend: &backend
+  build:
+    context: ../..
+    dockerfile: infra/docker/backend.Dockerfile
+  image: kalkan-backend:selfhost
+  restart: unless-stopped
+  logging: *logging
+  security_opt:
+    - no-new-privileges:true
+
+x-common-env: &common-env
+  ENV: prod
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+
+# Evidence and reports as files under STORAGE_ROOT (the `objects` volume). The bucket names are
+# logical: object keys keep the gs://<bucket>/<path> form (kalkan.storage.filesystem).
+x-storage-env: &storage-env
+  STORAGE_BACKEND: filesystem
+  STORAGE_ROOT: /data/objects
+  GCS_EVIDENCE_BUCKET: kalkan-evidence
+  GCS_REPORTS_BUCKET: kalkan-reports
+
+x-mail-env: &mail-env
+  EMAIL_PROVIDER: ${EMAIL_PROVIDER:-smtp}
+  SMTP_URL: ${SMTP_URL:-}
+  SMTP_ALLOW_PLAINTEXT: ${SMTP_ALLOW_PLAINTEXT:-false}
+  POSTMARK_SERVER_TOKEN: ${POSTMARK_SERVER_TOKEN:-}
+  MAIL_FROM: ${MAIL_FROM:?set MAIL_FROM in .env}
+
+x-database-worker: &database-worker
+  DATABASE_URL_WORKER: postgresql+psycopg://kalkan_worker:${DB_WORKER_PASSWORD:?set DB_WORKER_PASSWORD in .env}@postgres:5432/kalkan
+  REDIS_URL: redis://kalkan:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/0
+
+services:
+  postgres:
+    image: postgres:16.15-trixie
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      DB_OWNER_PASSWORD: ${DB_OWNER_PASSWORD:?set DB_OWNER_PASSWORD in .env}
+      DB_API_PASSWORD: ${DB_API_PASSWORD:?set DB_API_PASSWORD in .env}
+      DB_WORKER_PASSWORD: ${DB_WORKER_PASSWORD:?set DB_WORKER_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Runs once on an empty volume: roles, extensions and RLS roles (no test database).
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - ../../backend/sql:/opt/kalkan/sql:ro
+    healthcheck:
+      # TCP check: the temporary server used during initdb listens only on the socket.
+      test: ["CMD", "pg_isready", "--host=127.0.0.1", "--username=kalkan_owner", "--dbname=kalkan"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  # Jobs only (state lives in Postgres). Users kalkan (application) and browser (worker-browser,
+  # limited to its queues): redis/start.sh renders the ACL file from the two passwords.
+  redis:
+    image: redis:7.4.11-bookworm
+    restart: unless-stopped
+    logging: *logging
+    entrypoint: ["bash", "/opt/kalkan/redis-start.sh"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+      REDIS_BROWSER_PASSWORD: ${REDIS_BROWSER_PASSWORD:?set REDIS_BROWSER_PASSWORD in .env}
+    volumes:
+      - ./redis/start.sh:/opt/kalkan/redis-start.sh:ro
+      - ../../infra/compose/vm/bin/load-secrets.sh:/opt/kalkan/load-secrets.sh:ro
+    tmpfs:
+      - /run/redis:mode=0700
+    networks:
+      default: {}
+      browser: {}
+    healthcheck:
+      # Unauthenticated: NOAUTH also proves that Redis answers.
+      test: ["CMD-SHELL", "redis-cli ping | grep -qE 'PONG|NOAUTH'"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # One-off before every start of the application: Alembic upgrade head as kalkan_owner.
+  migrate:
+    <<: *backend
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      <<: *common-env
+      DATABASE_URL_MIGRATE: postgresql+psycopg://kalkan_owner:${DB_OWNER_PASSWORD}@postgres:5432/kalkan
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *backend
+    # Only Caddy and the internal services reach it, so its forwarded headers are trusted.
+    command: ["uvicorn", "kalkan.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    environment:
+      <<: [*common-env, *storage-env, *mail-env]
+      DATABASE_URL_API: postgresql+psycopg://kalkan_api:${DB_API_PASSWORD}@postgres:5432/kalkan
+      # Caddy adds it to every request; required with ENV=prod.
+      EDGE_SHARED_SECRET: ${EDGE_SHARED_SECRET:?set EDGE_SHARED_SECRET in .env}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?set TOTP_ENCRYPTION_KEY in .env}
+      APP_BASE_URL: https://${APP_DOMAIN:?set APP_DOMAIN in .env}
+      # Postmark's inbound and bounce webhooks; empty refuses every webhook call.
+      POSTMARK_WEBHOOK_BASIC_AUTH: ${POSTMARK_WEBHOOK_BASIC_AUTH:-}
+    volumes:
+      - objects:/data/objects
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  # The customer panel, built without API_ORIGIN: Caddy sends /api/* to the api service.
+  # No EDGE_SHARED_SECRET here: only Caddy and worker-browser (print network) reach it, and
+  # worker-browser prints from http://web:3000 without the header.
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+    image: kalkan-web:selfhost
+    restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      APP_BASE_URL: https://${APP_DOMAIN}
+      # The print page's server-side read of the report data: Caddy's internal listener, which
+      # adds X-Edge-Auth (Caddyfile, :8080).
+      API_ORIGIN: http://caddy:8080
+    networks:
+      default: {}
+      print: {}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  worker-default:
+    <<: *backend
+    command: ["python", "-m", "kalkan.workers", "default"]
+    environment:
+      <<: [*common-env, *storage-env, *mail-env, *database-worker]
+      CASE_PREFIX: ${CASE_PREFIX:-KLK}
+      # Optional sources: skipped while empty.
+      WEBRISK_API_KEY: ${WEBRISK_API_KEY:-}
+      CZDS_USERNAME: ${CZDS_USERNAME:-}
+      CZDS_PASSWORD: ${CZDS_PASSWORD:-}
+      CZDS_TLDS: ${CZDS_TLDS:-}
+      REPLY_DOMAIN: ${REPLY_DOMAIN:-}
+      # Real abuse notices only once you set false; until then they go to DRY_RUN_REDIRECT_EMAIL.
+      NOTICES_DRY_RUN: ${NOTICES_DRY_RUN:-true}
+      DRY_RUN_REDIRECT_EMAIL: ${DRY_RUN_REDIRECT_EMAIL:-}
+      APP_BASE_URL: https://${APP_DOMAIN}
+      EVIDENCE_BASE_URL: https://${EVIDENCE_DOMAIN:?set EVIDENCE_DOMAIN in .env}
+      # On when worker-ai can run (AI_ENABLED, else an Anthropic key in .env); this service
+      # never gets the key itself.
+      AI_ENABLED: ${AI_ENABLED:-${ANTHROPIC_API_KEY:+true}}
+    volumes:
+      - objects:/data/objects
+      # worker-browser's screenshots and HTML; persist_capture reads and deletes them.
+      - artifacts-tmp:/artifacts-tmp
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9191/', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  scheduler:
+    <<: *backend
+    command: ["python", "-m", "kalkan.scheduler"]
+    environment:
+      <<: [*common-env, *database-worker]
+      AI_MONTHLY_BUDGET_USD: ${AI_MONTHLY_BUDGET_USD:-50}
+      ALERT_AI_DAILY_USD: ${ALERT_AI_DAILY_USD:-5}
+      AI_ENABLED: ${AI_ENABLED:-${ANTHROPIC_API_KEY:+true}}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/kalkan-scheduler.heartbeat') > 150)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+
+  # Operations panel: http://127.0.0.1:8081 on the server only (SSH tunnel). The first operator:
+  # docker compose exec ops kalkan staff create you@example.com --generate-password
+  ops:
+    <<: *backend
+    command: ["uvicorn", "kalkan.ops.main:app", "--host", "0.0.0.0", "--port", "8081", "--no-access-log"]
+    environment:
+      <<: [*common-env, *storage-env, *database-worker]
+      CASE_PREFIX: ${CASE_PREFIX:-KLK}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY}
+      APP_BASE_URL: https://${APP_DOMAIN}
+      NOTICES_DRY_RUN: ${NOTICES_DRY_RUN:-true}
+      DRY_RUN_REDIRECT_EMAIL: ${DRY_RUN_REDIRECT_EMAIL:-}
+    ports:
+      - "127.0.0.1:${OPS_PORT:-8081}:8081"
+    volumes:
+      - objects:/data/objects
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
+  # The only public service (Caddyfile): automatic HTTPS for APP_DOMAIN and EVIDENCE_DOMAIN.
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      EVIDENCE_DOMAIN: ${EVIDENCE_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+      EDGE_SHARED_SECRET: ${EDGE_SHARED_SECRET}
+    # Let's Encrypt checks the names on 80 and 443: move them (HTTP_PORT, HTTPS_PORT) only for
+    # a test behind another proxy or with *.localhost names (Caddy's own CA).
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_started
+
+  # --- profile browser ------------------------------------------------------------------------
+  # Chromium never reaches the internet itself: it sits on the internal `browser` network with
+  # Redis and egress-proxy, and every page goes through the proxy (PROXY_MAP), which refuses
+  # private, loopback, link-local and metadata addresses and connects to the address it checked
+  # (kalkan.net.egress_proxy). Pages leave from this server's own IP: there is no per-country
+  # exit as with a residential proxy. The monthly report is printed from web over the separate
+  # internal `print` network; Prometheus scrapes it over `browser-metrics`.
+  worker-browser:
+    build:
+      context: ../..
+      dockerfile: infra/docker/browser.Dockerfile
+    image: kalkan-browser:selfhost
+    profiles: ["browser"]
+    restart: unless-stopped
+    logging: *logging
+    init: true
+    user: pwuser
+    command: ["python", "-m", "kalkan.workers", "browser"]
+    environment:
+      <<: *common-env
+      # Redis user browser: its own queues only (redis/start.sh).
+      REDIS_URL: redis://browser:${REDIS_BROWSER_PASSWORD}@redis:6379/0
+      PROXY_MAP: '{"XX":"http://egress-proxy:8888"}'
+      PROXY_DEFAULT_COUNTRY: XX
+      PROXY_DAILY_GB_LIMIT: ${PROXY_DAILY_GB_LIMIT:-20}
+      APP_BASE_URL: https://${APP_DOMAIN}
+      REPORT_PRINT_BASE_URL: http://web:3000
+    networks:
+      browser: {}
+      print: {}
+      browser-metrics: {}
+    volumes:
+      - artifacts-tmp:/artifacts-tmp
+    cap_drop:
+      - ALL
+    # Chromium's sandbox needs user namespaces: Docker's default seccomp profile plus clone,
+    # unshare, setns and chroot. Never --no-sandbox. On Ubuntu 24.04 hosts see README.md
+    # (AppArmor and unprivileged user namespaces).
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=../../infra/compose/vm/seccomp-chromium.json
+    depends_on:
+      redis:
+        condition: service_healthy
+      egress-proxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9191/', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  egress-proxy:
+    <<: *backend
+    profiles: ["browser"]
+    command: ["python", "-m", "kalkan.net.egress_proxy", "--listen", "0.0.0.0:8888"]
+    environment:
+      <<: *common-env
+    read_only: true
+    cap_drop:
+      - ALL
+    networks:
+      # No authentication: only the internal browser network may reach it.
+      browser: {}
+      egress: {}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8888), 2).close()"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+  # --- profile ai -----------------------------------------------------------------------------
+  worker-ai:
+    <<: *backend
+    profiles: ["ai"]
+    command: ["python", "-m", "kalkan.workers", "ai"]
+    environment:
+      <<: [*common-env, *storage-env, *database-worker]
+      # Without a key the worker stops at start-up (Settings.require_for).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_TRIAGE_MODEL: ${AI_TRIAGE_MODEL:-claude-haiku-5-5}
+      AI_CONFIRM_MODEL: ${AI_CONFIRM_MODEL:-claude-sonnet-5-5}
+      AI_TEXT_MODEL: ${AI_TEXT_MODEL:-claude-sonnet-5-5}
+      AI_REPLY_MODEL: ${AI_REPLY_MODEL:-claude-haiku-5-5}
+      AI_MONTHLY_BUDGET_USD: ${AI_MONTHLY_BUDGET_USD:-50}
+      AI_PRICES: ${AI_PRICES:-}
+      EVIDENCE_BASE_URL: https://${EVIDENCE_DOMAIN}
+    volumes:
+      - objects:/data/objects
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9191/', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  # --- profile ct -----------------------------------------------------------------------------
+  certstream:
+    image: 0rickyy0/certstream-server-go:v1.10.1
+    profiles: ["ct"]
+    restart: unless-stopped
+    logging: *logging
+    volumes:
+      - ../../infra/compose/vm/certstream.yaml:/app/config/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/example.json || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  ct-consumer:
+    <<: *backend
+    profiles: ["ct"]
+    command: ["python", "-m", "kalkan.discovery.ct"]
+    environment:
+      <<: [*common-env, *database-worker]
+      CERTSTREAM_URL: ws://certstream:8080/
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      certstream:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/kalkan-ct-consumer.heartbeat') > 90)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+
+  # --- profile monitoring ---------------------------------------------------------------------
+  # The reference VM's alert rules and dashboards (infra/compose/vm). The UIs listen on 127.0.0.1.
+  prometheus:
+    image: prom/prometheus:v3.13.4
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    logging: *logging
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=2GB
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../../infra/compose/vm/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    networks:
+      # The default route and the published port stay on the app network.
+      default:
+        gw_priority: 1
+      browser-metrics: {}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  # Alarms by plain SMTP: monitoring/alertmanager.sh renders the configuration from ALERT_* and
+  # OPS_ALERT_EMAIL with the reference VM's renderer and template (without them alarms are
+  # dropped).
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    logging: *logging
+    entrypoint: ["/bin/sh", "/etc/alertmanager/kalkan/alertmanager.sh"]
+    environment:
+      ALERT_SMTP_SMARTHOST: ${ALERT_SMTP_SMARTHOST:-}
+      ALERT_SMTP_USERNAME: ${ALERT_SMTP_USERNAME:-}
+      ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
+      ALERT_SMTP_REQUIRE_TLS: ${ALERT_SMTP_REQUIRE_TLS:-true}
+      ALERT_MAIL_FROM: ${ALERT_MAIL_FROM:-}
+      OPS_ALERT_EMAIL: ${OPS_ALERT_EMAIL:-}
+    ports:
+      - "127.0.0.1:${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./monitoring/alertmanager.sh:/etc/alertmanager/kalkan/alertmanager.sh:ro
+      - ../../infra/compose/vm/bin/render-alertmanager.sh:/etc/alertmanager/kalkan/render-alertmanager.sh:ro
+      - ../../infra/compose/vm/alertmanager/alertmanager.yml.tmpl:/etc/alertmanager/kalkan/alertmanager.yml.tmpl:ro
+      - alertmanager-data:/alertmanager
+    tmpfs:
+      # The image runs as nobody (65534).
+      - /run/alertmanager:uid=65534,gid=65534,mode=0700
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9093/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+    volumes:
+      - ../../infra/compose/vm/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ../../infra/compose/vm/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ../../infra/compose/vm/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
+  # The server's disk, memory and CPU (DiskAlmostFull). The host's root read-only, no ports.
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    logging: *logging
+    command:
+      - --path.rootfs=/host
+      - --collector.disable-defaults
+      - --collector.filesystem
+      - --collector.meminfo
+      - --collector.cpu
+      - --collector.loadavg
+      - --collector.diskstats
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|run|sys|var/lib/docker/.+)($|/)
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /:/host:ro,rslave
+
+volumes:
+  postgres-data:
+  # Evidence and reports (STORAGE_ROOT); back it up with the database (README.md).
+  objects:
+  # worker-browser -> worker-default hand-off; both images own /artifacts-tmp as uid 10001.
+  artifacts-tmp:
+  caddy-data:
+  caddy-config:
+  prometheus-data:
+  alertmanager-data:
+  grafana-data:
+
+networks:
+  default: {}
+  # worker-browser, Redis and egress-proxy: no route out.
+  browser:
+    internal: true
+  # egress-proxy's way out; nothing else joins it.
+  egress: {}
+  # worker-browser -> web (report printing) only.
+  print:
+    internal: true
+  # Prometheus -> worker-browser metrics only.
+  browser-metrics:
+    internal: true

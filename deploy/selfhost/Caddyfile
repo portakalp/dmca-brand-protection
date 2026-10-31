@@ -1,0 +1,64 @@
+# Kalkan's only public entry point on a self-hosted server (docker-compose.yml, README.md).
+# It does what the Cloudflare edge Worker does in the cloud reference (infra/cloudflare):
+#   APP_DOMAIN       /api/* and /healthz to the api service, everything else to the web panel
+#   EVIDENCE_DOMAIN  everything to the api service (the evidence pages, §17)
+# Every forwarded request carries X-Edge-Auth with EDGE_SHARED_SECRET: with ENV=prod the api
+# refuses requests without it, so only what passed through here is served. A client-sent
+# X-Edge-Auth is replaced, never passed on. Caddy also sets X-Forwarded-For to the client's
+# address (an incoming one is ignored: no trusted proxies), which the api's rate limits use.
+# Certificates: automatic HTTPS (Let's Encrypt or ZeroSSL) for both names; ports 80 and 443 must
+# reach this host and both names must point at it. Variables come from the container's
+# environment ({$NAME}, read once at start).
+{
+	email {$ACME_EMAIL}
+	# No admin endpoint: the configuration (with the secret) changes only by a restart.
+	admin off
+}
+
+(edge) {
+	header_up X-Edge-Auth {$EDGE_SHARED_SECRET}
+}
+
+(security) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+}
+
+{$APP_DOMAIN} {
+	import security
+	@api path /api /api/* /healthz
+	handle @api {
+		reverse_proxy api:8000 {
+			import edge
+		}
+	}
+	handle {
+		reverse_proxy web:3000 {
+			import edge
+		}
+	}
+}
+
+{$EVIDENCE_DOMAIN} {
+	import security
+	reverse_proxy api:8000 {
+		import edge
+	}
+}
+
+# Internal only (port 8080 is not published): the panel's server reads the monthly report's
+# data here when worker-browser prints it (web: API_ORIGIN=http://caddy:8080), so that request
+# carries X-Edge-Auth too without the web service knowing the secret. API paths only.
+:8080 {
+	@api path /api/*
+	handle @api {
+		reverse_proxy api:8000 {
+			import edge
+		}
+	}
+	handle {
+		respond 404
+	}
+}

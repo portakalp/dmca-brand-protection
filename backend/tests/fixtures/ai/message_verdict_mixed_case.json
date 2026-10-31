@@ -1,0 +1,30 @@
+{
+  "id": "msg_01TestMixedCaseAAAAAAAAA",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-haiku-5-5",
+  "content": [
+    {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "EqQBCkYIBxgCKkDtestsignature"
+    },
+    {
+      "type": "text",
+      "text": "{\"category\":\"Phishing_Clone\",\"confidence\":0.94,\"copied_elements\":[\"LOGO\",\"Layout\"],\"collects_credentials_or_payment\":true,\"evidence\":[\"Image 1 shows the Mintera Bank logo and login layout.\",\"The forms include a password field that posts to another host.\"],\"suggested_basis\":\"PHISHING\",\"short_explanation\":\"A copy of the Mintera Bank login page that collects passwords.\"}"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 1450,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 2600,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 190,
+    "service_tier": "standard"
+  }
+}

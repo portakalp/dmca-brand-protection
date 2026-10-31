@@ -1,0 +1,2 @@
+LEGAL_REVIEW_REQUIRED
+Yukarıda tanımlanan sitede {{ brand }} markalarının kullanımına marka sahibi, temsilcisi veya hukuk tarafından izin verilmediğine iyi niyetle inanıyoruz. Bu bildirimdeki bilgiler bildiğimiz kadarıyla doğrudur ve ilgili markaların sahibi {{ brand }} adına hareket etmeye yetkiliyiz.

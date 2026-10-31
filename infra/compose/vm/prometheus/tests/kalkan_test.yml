@@ -1,0 +1,231 @@
+# promtool unit tests of rules/kalkan.yml (`make infra-check`; promtool test rules).
+rule_files:
+  - ../rules/kalkan.yml
+
+evaluation_interval: 1m
+
+tests:
+  # A growing queue fires after 30 minutes plus `for`; a draining one does not.
+  - interval: 1m
+    input_series:
+      - series: 'queue_depth{queue="capture",state="waiting"}'
+        values: '150+5x60'
+      - series: 'queue_depth{queue="ai",state="waiting"}'
+        values: '400-5x60'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: QueueBacklog
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: QueueBacklog
+        exp_alerts:
+          - exp_labels: {severity: warning, queue: capture, state: waiting}
+            exp_annotations:
+              summary: "Queue capture has been backing up for 30 minutes (350 waiting)"
+              runbook: "docs/operations.md: Alarms, QueueBacklog"
+
+  - interval: 1m
+    input_series:
+      - series: 'queue_depth{queue="notify",state="dead"}'
+        values: '0 0 0 1 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: DeadLetters
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: DeadLetters
+        exp_alerts:
+          - exp_labels: {severity: warning, queue: notify, state: dead}
+            exp_annotations:
+              summary: "Queue notify has new dead letters"
+              runbook: "docs/operations.md: Alarms, DeadLetters"
+
+  - interval: 1m
+    input_series:
+      - series: 'ct_events_total{job="ct-consumer",instance="ct-consumer:9300"}'
+        values: '0+100x10 1000x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: NoCtEvents
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: NoCtEvents
+        exp_alerts:
+          - exp_labels: {severity: critical, job: ct-consumer, instance: "ct-consumer:9300"}
+            exp_annotations:
+              summary: "No certificate updates from the CT stream for 10 minutes"
+              runbook: "docs/operations.md: Alarms, NoCtEvents"
+
+  # The consumer is gone: the series is absent.
+  - interval: 1m
+    input_series: []
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: NoCtEvents
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "No certificate updates from the CT stream for 10 minutes"
+              runbook: "docs/operations.md: Alarms, NoCtEvents"
+
+  - interval: 1m
+    input_series:
+      - series: 'ai_spend_today_usd'
+        values: '1 4 6'
+      - series: 'ai_daily_alert_usd'
+        values: '5 5 5'
+      - series: 'ai_spend_month_usd'
+        values: '40 49 50'
+      - series: 'ai_monthly_budget_usd'
+        values: '50 50 50'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: AiDailySpendHigh
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: AiDailySpendHigh
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "Today's AI spend is 6.00 USD, above ALERT_AI_DAILY_USD"
+              runbook: "docs/operations.md: Alarms, AiDailySpendHigh"
+      - eval_time: 1m
+        alertname: AiBudgetExhausted
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: AiBudgetExhausted
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "The monthly AI budget is spent; new cases go to review without AI"
+              runbook: "docs/operations.md: Alarms, AiBudgetExhausted"
+
+  # 60 % errors over 20 captures an hour.
+  - interval: 1m
+    input_series:
+      - series: 'captures_total{outcome="error"}'
+        values: '0+0.2x120'
+      - series: 'captures_total{outcome="ok"}'
+        values: '0+0.13333x120'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: CaptureErrorRate
+        exp_alerts: []
+      - eval_time: 90m
+        alertname: CaptureErrorRate
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "More than half of the browser captures fail (60%)"
+              runbook: "docs/operations.md: Alarms, CaptureErrorRate"
+
+  # A few errors in a quiet hour are not an alarm.
+  - interval: 1m
+    input_series:
+      - series: 'captures_total{outcome="error"}'
+        values: '0x30 3x90'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: CaptureErrorRate
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'capture_deferrals_total{reason="no_proxy"}'
+        values: '0 0 1 2'
+      - series: 'capture_deferrals_total{reason="proxy_daily_limit"}'
+        values: '0 0 0 4'
+      - series: 'capture_deferrals_total{reason="browser_unavailable"}'
+        values: '0+1x30'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ProxyMissing
+        exp_alerts:
+          - exp_labels: {severity: critical, reason: no_proxy}
+            exp_annotations:
+              summary: "Captures wait: no proxy is configured for a country"
+              runbook: "docs/operations.md: Alarms, ProxyMissing"
+      - eval_time: 3m
+        alertname: ProxyDailyLimit
+        exp_alerts:
+          - exp_labels: {severity: warning, reason: proxy_daily_limit}
+            exp_annotations:
+              summary: "The daily proxy limit (PROXY_DAILY_GB_LIMIT) is reached; captures wait for tomorrow"
+              runbook: "docs/operations.md: Alarms, ProxyDailyLimit"
+      - eval_time: 5m
+        alertname: BrowserUnavailable
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BrowserUnavailable
+        exp_alerts:
+          - exp_labels: {severity: critical, reason: browser_unavailable}
+            exp_annotations:
+              summary: "worker-browser cannot start Chromium; captures wait"
+              runbook: "docs/operations.md: Alarms, BrowserUnavailable"
+
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/",fstype="ext4",device="/dev/sda1"}'
+        values: '10x5 5x20'
+      - series: 'node_filesystem_size_bytes{mountpoint="/",fstype="ext4",device="/dev/sda1"}'
+        values: '30x25'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: DiskAlmostFull
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: DiskAlmostFull
+        exp_alerts:
+          - exp_labels: {severity: warning, mountpoint: "/", fstype: ext4, device: /dev/sda1}
+            exp_annotations:
+              summary: "The VM's disk is 83.33% full"
+              runbook: "docs/operations.md: Alarms, DiskAlmostFull"
+
+  # The review queue is not an operator task; a 25-hour-old manual form is.
+  - interval: 1m
+    input_series:
+      - series: 'open_task_oldest_seconds{kind="review"}'
+        values: '200000'
+      - series: 'open_task_oldest_seconds{kind="manual_channel"}'
+        values: '90000'
+      - series: 'open_task_oldest_seconds{kind="reply"}'
+        values: '3600'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: ManualTaskWaiting
+        exp_alerts:
+          - exp_labels: {severity: warning, kind: manual_channel}
+            exp_annotations:
+              summary: "A manual_channel task has been open for more than 24 hours"
+              runbook: "docs/operations.md: Alarms, ManualTaskWaiting"
+
+  - interval: 1m
+    input_series:
+      - series: 'outbox_stuck'
+        values: '2x15'
+      - series: 'up{job="worker-default",instance="worker-default:9191"}'
+        values: '1 0x15'
+      - series: 'exporter_source_up{source="database"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: OutboxStuck
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "2 outbox rows could not be dispatched (K66)"
+              runbook: "docs/operations.md: Alarms, OutboxStuck"
+      - eval_time: 12m
+        alertname: TargetDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: worker-default, instance: "worker-default:9191"}
+            exp_annotations:
+              summary: "Prometheus cannot scrape worker-default"
+              runbook: "docs/operations.md: Alarms, TargetDown"
+      - eval_time: 6m
+        alertname: ExporterSourceDown
+        exp_alerts:
+          - exp_labels: {severity: critical, source: database}
+            exp_annotations:
+              summary: "The scheduler cannot read database"
+              runbook: "docs/operations.md: Alarms, TargetDown"

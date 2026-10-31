@@ -1,0 +1,27 @@
+Sayın abuse ekibi,
+
+{{ brand }} adına {{ domain }} hakkında yazıyoruz. Bu site {{ brand }}'ı taklit ediyor ve müşterilerinin giriş veya ödeme bilgilerini topluyor (oltalama).
+{% if channel == "registrar" %}
+Bu alan adının kayıt kuruluşu olarak lütfen alan adını askıya alın veya abuse politikanızın öngördüğü işlemi yapın.
+{% elif channel == "registry" %}
+.{{ tld }} uzantısının kayıt idaresi olarak lütfen politikanızın öngördüğü önlemi alın veya alan adını kayıt kuruluşuna iletin.
+{% elif channel == "hosting" %}
+Bu siteyi barındıran sağlayıcı olarak lütfen içeriği kaldırın veya hizmeti durdurun.
+{% elif channel == "google" %}
+Lütfen bu URL'yi Google Safe Browsing'e ekleyin.
+{% endif %}
+
+{{ explanation }}
+
+{% include "_facts.tr.j2" %}
+
+{{ legal }}
+{% if icann %}
+
+{{ icann }}
+{% endif %}
+
+Lütfen bu e-postayı yanıtlayın ve konu satırında {{ case_number }} numarasını koruyun.
+
+{{ brand }} adına marka koruma ekibi
+Yanıtlar: {{ reply_to }}

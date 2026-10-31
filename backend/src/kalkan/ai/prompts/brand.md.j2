@@ -1,0 +1,23 @@
+<brand_profile>
+Brand: {{ brand.name }}
+Keywords: {{ brand.keywords | join(", ") or "none" }}
+Target markets: {{ brand.target_markets | join(", ") or "not set" }}
+Languages: {{ brand.languages | join(", ") or "not set" }}
+Official domains:
+{% for item in brand.official_domains %}
+- {{ item.domain }} ({{ item.kind }})
+{% else %}
+- none on file
+{% endfor %}
+Whitelisted hosts (the customer's own or approved sites, never a threat):
+{% for item in whitelist %}
+- {{ item }}
+{% else %}
+- none
+{% endfor %}
+{% if images %}
+Official images follow, each after its label: {{ images | join("; ") }}.
+{% else %}
+No official images are on file.
+{% endif %}
+</brand_profile>

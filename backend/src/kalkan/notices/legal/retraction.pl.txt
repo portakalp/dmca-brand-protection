@@ -1,0 +1,2 @@
+LEGAL_REVIEW_REQUIRED
+Ta wiadomość wycofuje wyłącznie nasze wcześniejsze zgłoszenie. Jesteśmy upoważnieni do działania w imieniu {{ brand }}.

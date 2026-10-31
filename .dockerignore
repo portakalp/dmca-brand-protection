@@ -1,0 +1,29 @@
+**/.git
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.mypy_cache
+**/.ruff_cache
+**/.pytest_cache
+**/node_modules
+**/.DS_Store
+.env
+.env.*
+.local
+docs
+eval
+fixtures
+backend/tests
+**/.terraform
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+**/.wrangler
+**/.dev.vars*
+# google-github-actions/auth credentials file (a deploy workflow builds after authenticating)
+**/gha-creds-*.json
+# The panel's build output and test results (web.Dockerfile builds from source)
+web/.next
+web/test-results
+web/playwright-report
+web/e2e/.auth

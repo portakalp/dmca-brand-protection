@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Manual tasks · Kalkan ops{% endblock %}
+{% block content %}
+<h1>Manual tasks</h1>
+<p class="filters">
+  <a href="/tasks"{% if not chosen %} class="active"{% endif %}>All</a>
+  {% for kind in kinds %} · <a href="/tasks?kind={{ kind.value }}"{% if chosen == kind %} class="active"{% endif %}>{{ kind.value.replace("_", " ") }}</a>{% endfor %}
+</p>
+{% for item in items %}
+{% set task = item.task %}{% set notice = item.notice %}
+<section class="card{% if item.dry_run %} inert{% endif %}" id="task-{{ task.id }}">
+  <div class="case-line">
+    {% if task.case_id %}<a href="/cases/{{ task.case_id }}">{{ item.number }}</a>{% else %}—{% endif %}
+    <span>{{ task.kind.value.replace("_", " ") }}</span>
+    {% if item.dry_run %}<span class="pill">dry run</span>{% endif %}
+    <span class="muted">{{ task.created_at|when }}</span>
+  </div>
+  <p>{{ task.reason }}</p>
+  {% if notice and notice.recipient %}<p>Form or address: <span class="mono" id="to-{{ task.id }}">{{ notice.recipient }}</span> <button type="button" class="secondary" data-copy="to-{{ task.id }}">Copy</button></p>{% endif %}
+  {% if notice and notice.body %}
+  <p><strong id="subject-{{ task.id }}">{{ notice.subject }}</strong> <button type="button" class="secondary" data-copy="subject-{{ task.id }}">Copy subject</button></p>
+  <pre class="notice-body" id="body-{{ task.id }}">{{ notice.body }}</pre>
+  <button type="button" class="secondary" data-copy="body-{{ task.id }}">Copy text</button>
+  {% endif %}
+  <form method="post" action="/tasks/{{ task.id }}/submitted" class="inline">
+    <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+    {% if item.submit %}<button type="submit"{% if item.dry_run %} disabled title="Dry-run tasks are never submitted"{% endif %}>Submitted</button>{% else %}<button type="submit">Done</button>{% endif %}
+  </form>
+</section>
+{% else %}
+<p class="card muted">No open tasks.</p>
+{% endfor %}
+{% endblock %}

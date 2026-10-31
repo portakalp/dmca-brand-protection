@@ -1,0 +1,16 @@
+<div class="compare">
+  {% for profile in ["desktop", "mobile"] %}
+  <div class="pair {{ profile }}">
+    <figure>
+      <figcaption>Official · {{ profile }}</figcaption>
+      {% set ref = view.references.get(profile) %}
+      {% if ref %}<img src="/files/assets/{{ ref }}" alt="Official {{ profile }} reference" loading="lazy">{% else %}<p class="empty">No reference</p>{% endif %}
+    </figure>
+    <figure>
+      {% set shot = view.shots.get(profile) %}
+      <figcaption>Candidate · {{ profile }}{% if shot and shot.final_url %} · <span class="mono">{{ shot.final_url|short(70) }}</span>{% endif %}</figcaption>
+      {% if shot %}<img src="/files/artifacts/{{ shot.artifact_id }}" alt="Candidate {{ profile }} screenshot" loading="lazy">{% else %}<p class="empty">No screenshot</p>{% endif %}
+    </figure>
+  </div>
+  {% endfor %}
+</div>

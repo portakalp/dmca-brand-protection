@@ -1,0 +1,140 @@
+# Alert rules (architecture.md §23; K173). Alertmanager e-mails them to OPS_ALERT_EMAIL.
+# Each rule's trigger path is in docs/operations.md, "Alarms"; the backup alarm is a Cloud
+# Monitoring policy (infra/terraform/monitoring.tf, K174). Tests: ../tests/kalkan_test.yml
+# (`make infra-check` runs promtool).
+groups:
+  - name: kalkan
+    rules:
+      # A queue keeps more than 100 messages and does not shrink for 30 minutes.
+      - alert: QueueBacklog
+        expr: |
+          queue_depth{state="waiting"} > 100
+          and deriv(queue_depth{state="waiting"}[15m]) >= 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue {{ $labels.queue }} has been backing up for 30 minutes ({{ $value }} waiting)"
+          runbook: "docs/operations.md: Alarms, QueueBacklog"
+
+      - alert: DeadLetters
+        expr: increase(queue_depth{state="dead"}[1h]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue {{ $labels.queue }} has new dead letters"
+          runbook: "docs/operations.md: Alarms, DeadLetters"
+
+      # The CT stream is the main discovery source (§9).
+      - alert: NoCtEvents
+        expr: increase(ct_events_total[10m]) == 0 or absent(ct_events_total)
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No certificate updates from the CT stream for 10 minutes"
+          runbook: "docs/operations.md: Alarms, NoCtEvents"
+
+      - alert: AiDailySpendHigh
+        expr: ai_spend_today_usd > ai_daily_alert_usd
+        labels:
+          severity: warning
+        annotations:
+          summary: "Today's AI spend is {{ $value | printf \"%.2f\" }} USD, above ALERT_AI_DAILY_USD"
+          runbook: "docs/operations.md: Alarms, AiDailySpendHigh"
+
+      # K125: calls stop and cases go to review once the month's spend reaches the budget.
+      - alert: AiBudgetExhausted
+        expr: ai_spend_month_usd >= ai_monthly_budget_usd and ai_monthly_budget_usd > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "The monthly AI budget is spent; new cases go to review without AI"
+          runbook: "docs/operations.md: Alarms, AiBudgetExhausted"
+
+      # More than half of the captures fail, once there are at least 10 in the hour.
+      - alert: CaptureErrorRate
+        expr: |
+          sum(increase(captures_total{outcome="error"}[1h]))
+            / sum(increase(captures_total[1h])) > 0.5
+          and sum(increase(captures_total[1h])) >= 10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than half of the browser captures fail ({{ $value | humanizePercentage }})"
+          runbook: "docs/operations.md: Alarms, CaptureErrorRate"
+
+      - alert: ProxyMissing
+        expr: increase(capture_deferrals_total{reason="no_proxy"}[15m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Captures wait: no proxy is configured for a country"
+          runbook: "docs/operations.md: Alarms, ProxyMissing"
+
+      - alert: ProxyDailyLimit
+        expr: increase(capture_deferrals_total{reason="proxy_daily_limit"}[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "The daily proxy limit (PROXY_DAILY_GB_LIMIT) is reached; captures wait for tomorrow"
+          runbook: "docs/operations.md: Alarms, ProxyDailyLimit"
+
+      - alert: BrowserUnavailable
+        expr: increase(capture_deferrals_total{reason="browser_unavailable"}[15m]) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "worker-browser cannot start Chromium; captures wait"
+          runbook: "docs/operations.md: Alarms, BrowserUnavailable"
+
+      - alert: DiskAlmostFull
+        expr: |
+          1 - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+            / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The VM's disk is {{ $value | humanizePercentage }} full"
+          runbook: "docs/operations.md: Alarms, DiskAlmostFull"
+
+      # Operator tasks (manual forms, escalations, replies, bounces, retractions); the
+      # review queue has its own daily routine.
+      - alert: ManualTaskWaiting
+        expr: open_task_oldest_seconds{kind!="review"} > 86400
+        labels:
+          severity: warning
+        annotations:
+          summary: "A {{ $labels.kind }} task has been open for more than 24 hours"
+          runbook: "docs/operations.md: Alarms, ManualTaskWaiting"
+
+      - alert: OutboxStuck
+        expr: outbox_stuck > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} outbox rows could not be dispatched (K66)"
+          runbook: "docs/operations.md: Alarms, OutboxStuck"
+
+      # A scrape target is down, or the exporter cannot read Redis or the database.
+      - alert: TargetDown
+        expr: up == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus cannot scrape {{ $labels.job }}"
+          runbook: "docs/operations.md: Alarms, TargetDown"
+
+      - alert: ExporterSourceDown
+        expr: exporter_source_up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The scheduler cannot read {{ $labels.source }}"
+          runbook: "docs/operations.md: Alarms, TargetDown"

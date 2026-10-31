@@ -1,0 +1,23 @@
+<div id="whitelist-report">
+{% if error %}
+  <p class="flash error">{{ error }}</p>
+{% else %}
+  {% if report.errors %}
+  <p class="flash error">{{ report.errors|length }} invalid row(s); nothing will be imported until they are fixed.</p>
+  <table>
+    <thead><tr><th>Line</th><th>Problem</th></tr></thead>
+    <tbody>{% for row in report.errors %}<tr><td>{{ row.line }}</td><td>{{ row.message }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% else %}
+  <p class="flash">Preview: {{ report.imported }} new, {{ report.already_listed }} already listed.</p>
+  {% if report.imported %}
+  <form method="post" action="/customers/{{ customer_id }}/whitelist/import">
+    <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+    <input type="hidden" name="brand" value="{{ brand }}">
+    <textarea name="csv_text" hidden>{{ csv_text }}</textarea>
+    <button type="submit">Import {{ report.imported }} row(s)</button>
+  </form>
+  {% endif %}
+  {% endif %}
+{% endif %}
+</div>

@@ -1,0 +1,59 @@
+# Secrets and local-only files
+.env
+.env.*
+!.env.example
+.local/
+# Database dumps and evidence archives from backups
+*.dump
+objects-*.tar.gz
+
+# AI evaluation datasets and reports: screenshots of real sites, never in the repository
+eval/datasets/
+eval/reports/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Node (web/, infra/cloudflare/)
+node_modules/
+.next/
+# Playwright output, wherever a run writes it
+test-results/
+playwright-report/
+# Wrangler state and local Worker secrets
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# Terraform (.terraform.lock.hcl is committed)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+# Saved plans (terraform plan -out=tfplan) carry state values unencrypted
+tfplan
+*.tfplan
+crash.log
+crash.*.log
+.terraformrc
+terraform.rc
+
+# google-github-actions/auth writes its credentials file into the workspace (a deploy workflow)
+gha-creds-*.json
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store

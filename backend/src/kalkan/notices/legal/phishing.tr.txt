@@ -1,0 +1,2 @@
+LEGAL_REVIEW_REQUIRED
+Yukarıda tanımlanan sitenin kullanımının {{ brand }}, temsilcisi veya hukuk tarafından izin verilmediğine ve kullanıcıları aldatarak giriş veya ödeme bilgilerini toplamak için kullanıldığına iyi niyetle inanıyoruz. Bu bildirimdeki bilgiler bildiğimiz kadarıyla doğrudur ve {{ brand }} adına hareket etmeye yetkiliyiz.

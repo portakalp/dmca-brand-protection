@@ -1,0 +1,67 @@
+# Parked pages and bot challenges (architecture.md §10). Matching is case-insensitive.
+# Extend these lists when real-world pages show new patterns; tests cover the fixture pages.
+
+# Name servers of parking and domain-sale services: a domain that uses one is parked.
+parking_nameservers:
+  - sedoparking.com
+  - parkingcrew.net
+  - bodis.com
+  - above.com
+  - parklogic.com
+  - cashparking.com
+  - dsredirection.com
+  - afternic.com
+  - dan.com
+  - uniregistrymarket.link
+  - park.namebright.com
+  - parking.reg.ru
+  - ns1.parked.com
+  - ns2.parked.com
+
+# Text of parked and for-sale pages; found anywhere in the visible text or the title.
+parking_texts:
+  - this domain is for sale
+  - this domain may be for sale
+  - domain is for sale
+  - buy this domain
+  - the domain name is for sale
+  - make an offer on this domain
+  - this domain has been registered
+  - this domain is parked
+  - parked free, courtesy of
+  - future home of something quite cool
+
+# Phrases that also appear on real pages (search footers, FAQ headings): they mark a page as
+# parked only in its title or when the page has little text (K74).
+parking_texts_short_pages:
+  - domain parking
+  - related searches
+  - sponsored listings
+  - website coming soon
+  - account suspended
+  - this site can't be reached
+
+# Interstitial bot challenges in the raw HTML or headers. A challenge is never solved; the
+# browser stage sees it again and the case goes to review. Cloudflare's JavaScript Detections
+# script (/cdn-cgi/challenge-platform/scripts/jsd/) is on every page of many zones and is not
+# a challenge.
+challenge_texts:
+  - "<title>just a moment...</title>"
+  - "_cf_chl_opt"
+  - "/orchestrate/chl_page/"
+  - "/orchestrate/managed/"
+  - "/orchestrate/jsch/"
+  - "checking your browser before accessing"
+  - "<title>ddos-guard</title>"
+challenge_headers:
+  cf-mitigated: challenge
+
+# Captcha widgets: a challenge only on a captcha wall (little text, no password field); in a
+# login or contact form they are part of the page (K74).
+captcha_widgets:
+  - "challenges.cloudflare.com/turnstile"
+  - "cf-turnstile"
+  - "hcaptcha.com/1/api.js"
+  - "h-captcha"
+  - "google.com/recaptcha/"
+  - "g-recaptcha"

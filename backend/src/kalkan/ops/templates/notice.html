@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Notice · Kalkan ops{% endblock %}
+{% block content %}
+<h1>{{ notice.template.value|capitalize }} notice · <a href="/cases/{{ case.id }}">{{ case.number }}</a></h1>
+<section class="card">
+  <dl class="facts">
+    <dt>Channel</dt><dd>{{ notice.channel.value }} · {{ notice.method.value.replace("_", " ") }} · {{ notice.language.value }}</dd>
+    <dt>Recipient</dt><dd class="mono">{{ notice.recipient or "— (the operator finds one)" }}</dd>
+    <dt>Status</dt><dd>{% if notice.dry_run %}<span class="pill">dry run</span> {% endif %}{{ notice.status.value }}{% if notice.blocked_reason %}: {{ notice.blocked_reason.value }}{% endif %}</dd>
+    <dt>Sent</dt><dd>{{ notice.sent_at|when }}</dd>
+    <dt>Message-ID</dt><dd class="mono">{{ notice.provider_message_id or "—" }}</dd>
+    <dt>Explanation</dt><dd>{{ notice.explanation_source.value if notice.explanation_source else "—" }}</dd>
+  </dl>
+</section>
+<section class="card">
+  {% if notice.body %}
+  <p><strong>{{ notice.subject }}</strong></p>
+  <pre class="notice-body">{{ notice.body }}</pre>
+  {% else %}
+  <p class="muted">Not rendered yet: the text is written when the notice is sent or previewed.</p>
+  {% if notice.explanation_en %}<p>{{ notice.explanation_en }}</p>{% endif %}
+  {% endif %}
+</section>
+{% endblock %}

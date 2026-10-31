@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Review · Kalkan ops{% endblock %}
+{% block content %}
+<div class="labels-head">
+  <h1>Review</h1>
+  <span class="muted"><strong>{{ waiting }}</strong> waiting</span>
+</div>
+{% if view %}
+<section class="card" id="review-case">
+  <div class="case-line">
+    <a href="/cases/{{ view.case.id }}">{{ view.case.number }}</a>
+    <span class="mono big">{{ view.domain }}</span>
+    <span class="muted">{{ view.customer }} · {{ view.brand }}</span>
+    <a href="/review?after={{ view.case.number|urlencode }}" id="skip" class="button secondary"><kbd>N</kbd> Skip</a>
+  </div>
+  {% if view.reason %}<p class="review-reason"><strong>In review:</strong> {{ view.reason }}</p>{% endif %}
+  {% if view.suggestion %}
+  <p class="muted">Rule {{ view.suggestion.rule }} suggested <strong>{{ view.suggestion.outcome.value }}</strong>: {{ view.suggestion.reasons|join(" ") }}</p>
+  {% endif %}
+  {% include "_shots.html" %}
+  {% if view.signals %}
+  <ul class="signals">
+    {% for name, profile, value in view.signals %}<li><span>{{ name }}{% if profile %} · {{ profile }}{% endif %}</span> <strong>{{ value if value is not none else "—" }}</strong></li>{% endfor %}
+  </ul>
+  {% endif %}
+  <div class="verdicts">
+    {% for title, verdict in [("Triage", view.triage), ("Confirmation", view.confirm)] %}
+    <div class="verdict">
+      <h2>{{ title }}</h2>
+      {% if verdict %}
+      <p><strong>{{ verdict.category.value.replace("_", " ") }}</strong> · confidence {{ "%.2f"|format(verdict.confidence) }} · basis {{ verdict.suggested_basis.value }}{% if verdict.model %} · <span class="muted">{{ verdict.model }}</span>{% endif %}</p>
+      <p>{{ verdict.short_explanation }}</p>
+      {% if verdict.evidence %}<ul>{% for item in verdict.evidence %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+      {% else %}<p class="muted">None</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <form method="post" action="/review/{{ view.case.id }}" id="review-form" class="label-form">
+    <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+    <input type="hidden" name="after" value="{{ after or '' }}">
+    <div class="categories">
+      {% for choice in choices %}
+      <button type="submit" name="choice" value="{{ choice.value }}" data-keys="{{ choice.keys }}">
+        {% for key in choice.keys %}<kbd>{{ key|upper }}</kbd>{% endfor %} {{ choice.text }}
+      </button>
+      {% endfor %}
+    </div>
+    <label><input type="checkbox" name="save_label" value="true" checked> Save as a label too</label>
+  </form>
+  <p class="muted keys">Keys: <kbd>A</kbd> then <kbd>P</kbd>/<kbd>T</kbd> approve · <kbd>V</kbd> verify only · <kbd>R</kbd> then <kbd>1</kbd>–<kbd>6</kbd> reject · <kbd>W</kbd> watch · <kbd>C</kbd> recapture · <kbd>N</kbd> skip · <kbd>Esc</kbd> cancel <span id="key-pending"></span></p>
+</section>
+{% else %}
+<p class="card muted">Nothing to review.</p>
+{% endif %}
+{% endblock %}

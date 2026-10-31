@@ -1,0 +1,124 @@
+[project]
+name = "kalkan"
+version = "0.1.0"
+description = "Brand protection and phishing takedown automation"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic>=1.20.0",
+    "anthropic>=2.3.0",
+    "apscheduler>=3.11,<4",
+    "argon2-cffi>=25.1.0",
+    "cryptography>=50.0.2",
+    "dnspython>=2.9.0",
+    "dnstwist>=20250130",
+    "dramatiq[redis]>=2.2.1",
+    "fastapi>=0.143.0",
+    "google-cloud-storage>=3.17.0",
+    "httpx2>=2.13.1",
+    "idna>=3.10",
+    "imagehash>=4.3.2",
+    "jinja2>=3.1.6",
+    "mmh3>=5.3.1",
+    "prometheus-client>=0.26.0",
+    "psycopg[binary]>=3.2",
+    "pyahocorasick>=2.3.1",
+    "pydantic-settings>=2.15.0",
+    "pyotp>=2.10.0",
+    "python-multipart>=0.0.20",
+    "pyyaml>=6.0.3",
+    "rapidfuzz>=3.14.6",
+    "sentry-sdk>=2.71.0",
+    "sqlalchemy>=2.0",
+    "structlog>=26.1.0",
+    "tldextract>=5.4.0",
+    "typer>=0.27.3",
+    "uuid-utils>=1.0.0",
+    "uvicorn[standard]>=0.54.0",
+    "websockets>=17.2",
+    "whoisit>=4.0.5",
+]
+
+[project.scripts]
+kalkan = "kalkan.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.12.24,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0",
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "responses>=0.26.3",
+    "ruff>=0.16.10",
+    "types-pyyaml>=6.0.12.20260906",
+]
+# The browser stage only (worker-browser image, local tests). The backend image syncs with
+# `--no-default-groups`; the browser image adds `--group browser`. The version matches the
+# Playwright image's browsers, and both are bumped together by hand (K84).
+browser = [
+    "playwright==1.63.0",
+]
+
+[tool.uv]
+default-groups = ["dev", "browser"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "S", "SIM", "PT", "RUF", "C4", "DTZ", "T20", "BLE",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+# Generated table definitions carry long CHECK constraint literals.
+"alembic/versions/*" = ["E501"]
+# Demo data uses a seeded, reproducible random generator on purpose.
+"src/kalkan/seed/*" = ["S311"]
+# Synthetic benchmark input from a seeded generator.
+"tests/benchmark/*" = ["S101", "S311"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["kalkan"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests", "alembic"]
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+strict_equality = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[[tool.mypy.overrides]]
+module = ["apscheduler.*", "google.cloud.*", "ahocorasick", "dnstwist", "whoisit", "whoisit.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+markers = [
+    "unit: fast tests without external services",
+    "integration: tests against the docker compose services (make up-infra)",
+    "benchmark: throughput checks, run with make bench (not part of make test)",
+    "e2e: the whole pipeline against the compose services and Chromium, run with make e2e",
+    "alerting: an alarm through Prometheus and Alertmanager to Mailpit, run with make alert-test",
+]
+xfail_strict = true
+filterwarnings = ["error"]

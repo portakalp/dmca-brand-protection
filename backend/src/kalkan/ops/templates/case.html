@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ case.number }} · Kalkan ops{% endblock %}
+{% block content %}
+<h1>{{ case.number }} <span class="mono">{{ view.domain }}</span></h1>
+<dl class="facts">
+  <dt>Customer</dt><dd>{{ view.customer }}</dd>
+  <dt>Brand</dt><dd>{{ view.brand }}</dd>
+  <dt>State</dt><dd><span class="pill state-{{ case.state.value }}">{{ case.state.value }}</span>{% if case.blocked_reason %} · blocked: {{ case.blocked_reason.value }}{% endif %}</dd>
+  <dt>Category</dt><dd>{{ case.category.value if case.category else "—" }}{% if case.confidence is not none %} ({{ case.confidence }}){% endif %}</dd>
+  <dt>First seen</dt><dd>{{ case.first_seen_at|when }}</dd>
+  <dt>Last action</dt><dd>{{ case.last_action or "—" }} · {{ case.last_action_at|when }}</dd>
+  <dt>Label</dt><dd>{{ view.label.category.value if view.label else "—" }}{% if view.label %} · {{ view.label.labeled_by }}{% endif %}</dd>
+</dl>
+
+<section class="card">
+  <h2>Screenshots</h2>
+  {% include "_shots.html" %}
+  {% set back = "case" %}{% set after = "" %}
+  {% include "_label_form.html" %}
+</section>
+
+<section class="card">
+  <h2>Signals</h2>
+  {% if signals %}
+  <table>
+    <thead><tr><th>Signal</th><th>Profile</th><th>Value</th></tr></thead>
+    <tbody>{% for name, profile, value in signals %}<tr><td>{{ name }}</td><td>{{ profile or "case" }}</td><td class="mono">{{ value if value is not none else "—" }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% else %}<p class="muted">No signals yet.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Scans</h2>
+  {% for scan in scans %}
+  <article class="scan">
+    <h3>{{ scan.stage.value }}{% if scan.profile %} · {{ scan.profile.value }}{% endif %} · {{ scan.outcome or "—" }}{% if scan.http_status %} · HTTP {{ scan.http_status }}{% endif %}</h3>
+    <p class="muted">{{ scan.started_at|when }}{% if scan.proxy_country %} · proxy {{ scan.proxy_country }}{% endif %}</p>
+    {% if scan.final_url %}<p class="mono">{{ scan.final_url|short(160) }}</p>{% endif %}
+    {% if scan.title %}<p>Title: {{ scan.title|short(200) }}</p>{% endif %}
+    {% if scan.error %}<p class="error">{{ scan.error|short(300) }}</p>{% endif %}
+    {% if scan.redirect_chain %}<details><summary>Redirects ({{ scan.redirect_chain|length }})</summary><ol class="mono">{% for url in scan.redirect_chain %}<li>{{ url|short(160) }}</li>{% endfor %}</ol></details>{% endif %}
+    {% if scan.text_excerpt %}<details><summary>Page text</summary><pre>{{ scan.text_excerpt|short(4000) }}</pre></details>{% endif %}
+    {% set files = artifacts.get(scan.id, []) %}
+    {% if files %}
+    <ul class="files">
+      {% for artifact in files %}
+      <li>
+        {% if artifact.content_type in ["image/png", "image/jpeg", "image/webp", "image/gif"] %}<a href="/files/artifacts/{{ artifact.id }}"><img src="/files/artifacts/{{ artifact.id }}" alt="{{ artifact.kind.value }}" class="thumb" loading="lazy"></a>{% endif %}
+        <a href="/files/artifacts/{{ artifact.id }}">{{ artifact.kind.value }}{% if artifact.profile %} · {{ artifact.profile.value }}{% endif %}</a>
+        <span class="muted mono">{{ artifact.sha256[:12] }} · {{ (artifact.bytes / 1024)|round(1) }} KB</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </article>
+  {% else %}<p class="muted">No scans.</p>{% endfor %}
+  {% set loose = artifacts.get(None, []) %}
+  {% if loose %}
+  <h3>Case files</h3>
+  <ul class="files">{% for artifact in loose %}<li><a href="/files/artifacts/{{ artifact.id }}">{{ artifact.kind.value }}</a> <span class="muted">{{ artifact.created_at|when }}</span></li>{% endfor %}</ul>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Events</h2>
+  <table>
+    <thead><tr><th>At</th><th>Type</th><th>Actor</th><th>Data</th></tr></thead>
+    <tbody>{% for event in events %}<tr><td>{{ event.at|when }}</td><td>{{ event.type.value }}</td><td>{{ event.actor }}</td><td class="mono">{{ event.data|tojson|short(240) }}</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+{% endblock %}

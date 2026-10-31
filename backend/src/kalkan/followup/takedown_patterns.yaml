@@ -1,0 +1,42 @@
+# Follow-up patterns (architecture.md §16). Matching is case-insensitive, on the visible text
+# and the title of the page. Extend these lists when real-world pages show new patterns; tests
+# cover the fixture pages.
+
+# Suspension pages of registrars and hosts: the site is down even though a page answers.
+suspended_texts:
+  - this domain has been suspended
+  - this domain name has been suspended
+  - domain has been suspended
+  - this domain is suspended
+  - domain suspended for abuse
+  - this domain has been disabled
+  - this account has been suspended
+  - account suspended
+  - this site has been suspended
+  - this website has been suspended
+  - website suspended
+  - this website has been disabled
+  - this site has been disabled
+  - site disabled due to abuse
+  - suspended due to a violation
+  - suspended due to abuse
+  - serverhold
+  - clienthold
+  - domain blocked for abuse
+  - домен заблокирован
+  - сайт заблокирован
+  - аккаунт заблокирован
+  - domena została zawieszona
+  - konto zostało zawieszone
+  - alan adı askıya alınmıştır
+  - hesap askıya alınmıştır
+
+# Warning pages put in front of a site that stays up (K19): a warning, never a takedown.
+warning_texts:
+  - suspected phishing site
+  - this website has been reported for potential phishing
+  - phishing is when a site attempts to steal sensitive information
+  - deceptive site ahead
+  - dangerous site ahead
+  - the site ahead contains malware
+  - this site has been reported as unsafe

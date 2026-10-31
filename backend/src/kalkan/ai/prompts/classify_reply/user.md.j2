@@ -1,0 +1,10 @@
+Our report was about the case domain: {{ domain }}
+{% if channel %}
+It went to the {{ channel }} channel.
+{% endif %}
+<untrusted_email>
+From: {{ sender }}
+Subject: {{ subject }}
+
+{{ body }}
+</untrusted_email>

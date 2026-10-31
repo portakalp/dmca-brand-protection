@@ -1,0 +1,24 @@
+{
+  "RecordType": "Bounce",
+  "MessageStream": "outbound",
+  "ID": 4323372036854775807,
+  "Type": "HardBounce",
+  "TypeCode": 1,
+  "Name": "Hard bounce",
+  "Tag": "phishing",
+  "MessageID": "{{provider_id}}",
+  "Metadata": {
+    "case": "{{number_upper}}"
+  },
+  "ServerID": 23,
+  "Description": "The server was unable to deliver your message (ex: unknown user, mailbox not found).",
+  "Details": "smtp;550 5.1.1 The email account that you tried to reach does not exist.",
+  "Email": "abuse@registrar.example",
+  "From": "abuse-reports@example.test",
+  "BouncedAt": "2026-12-08T10:20:00Z",
+  "DumpAvailable": false,
+  "Inactive": true,
+  "CanActivate": true,
+  "Subject": "[{{number_upper}}] Phishing report",
+  "Content": "<full dump>"
+}

@@ -1,0 +1,28 @@
+# The Kalkan VM stack (architecture.md §3, §22; K81): the firewall rules, fresh secrets from
+# Secret Manager on tmpfs, then docker compose. Stopping it removes the containers (volumes stay),
+# so at the next boot every container starts with the rules and secrets in place.
+# Installed by vm/bin/install-units.sh; deploys run docker compose directly (vm/bin/deploy.sh).
+[Unit]
+Description=Kalkan VM stack (docker compose in /opt/kalkan)
+Wants=network-online.target docker.service kalkan-firewall.service
+After=network-online.target docker.service kalkan-firewall.service snapd.seeded.service
+ConditionPathExists=/opt/kalkan/docker-compose.yml
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/kalkan
+Environment=HOME=/root
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin
+ExecStartPre=/usr/bin/bash /opt/kalkan/vm/bin/firewall.sh
+ExecStartPre=/usr/bin/bash /opt/kalkan/vm/bin/load-secrets.sh
+ExecStart=/usr/bin/docker compose -f /opt/kalkan/docker-compose.yml up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -f /opt/kalkan/docker-compose.yml down
+# Secret Manager or Docker not ready yet at boot: try again.
+Restart=on-failure
+RestartSec=30s
+TimeoutStartSec=15min
+TimeoutStopSec=5min
+
+[Install]
+WantedBy=multi-user.target

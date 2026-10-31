@@ -1,0 +1,47 @@
+Subject: [KLK-000123] Bildirimin geri çekilmesi: mintera-login.online (Withdrawal of report)
+
+Sayın abuse ekibi,
+
+2026-11-11 tarihinde size mintera-login.online hakkında KLK-000123 numaralı bildirimimizi gönderdik. Sonradan bu sitenin Mintera Bank'a ait olduğunu veya onun izniyle yayında olduğunu tespit ettik.
+Lütfen o bildirimi dikkate almayın ve başka işlem yapmayın. Bir işlem yaptıysanız lütfen geri alın. Verdiğimiz zahmet için özür dileriz.
+
+Olgular
+- Bildirilen URL: https://mintera-login.online/signin
+- Alan adı: mintera-login.online
+- IP adresleri: 203.0.113.5, 203.0.113.6
+- İlk tespit: 2026-11-10 09:30 UTC
+- Referans numaramız: KLK-000123
+- Kanıtlar (ekran görüntüleri, kaydedilen dosyalar ve özetleri): https://evidence.example.test/e/TOKEN
+- masaüstü ekran görüntüsü SHA-256 özeti: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+- mobil ekran görüntüsü SHA-256 özeti: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+
+Bu mesaj yalnızca önceki bildirimimizi geri çeker. Mintera Bank adına hareket etmeye yetkiliyiz.
+
+Lütfen bu e-postayı yanıtlayın ve konu satırında KLK-000123 numarasını koruyun.
+
+Mintera Bank adına marka koruma ekibi
+Yanıtlar: case+klk-000123@reply.example.test
+
+---------- English version ----------
+
+Dear abuse team,
+
+On 2026-11-11 we sent you our report KLK-000123 about mintera-login.online. We have since established that the website belongs to Mintera Bank or is authorised by it.
+Please disregard that report and take no further action. If you already acted on it, please reverse the action. We apologise for the trouble.
+
+Facts
+- Reported URL: https://mintera-login.online/signin
+- Domain: mintera-login.online
+- IP addresses: 203.0.113.5, 203.0.113.6
+- First seen: 2026-11-10 09:30 UTC
+- Our reference: KLK-000123
+- Evidence (screenshots, captured files and their hashes): https://evidence.example.test/e/TOKEN
+- SHA-256 of the desktop screenshot: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+- SHA-256 of the mobile screenshot: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+
+This message withdraws our earlier report only. We are authorised to act on behalf of Mintera Bank.
+
+Please reply to this e-mail and keep KLK-000123 in the subject.
+
+Brand protection team, acting for Mintera Bank
+Replies: case+klk-000123@reply.example.test

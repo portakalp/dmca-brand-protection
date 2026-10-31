@@ -1,0 +1,21 @@
+{
+  "id": "msg_01TestRefusalAAAAAAAAAAA",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-haiku-5-5",
+  "content": [
+    {
+      "type": "text",
+      "text": "I can't help with that."
+    }
+  ],
+  "stop_reason": "refusal",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 4050,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 12,
+    "service_tier": "standard"
+  }
+}

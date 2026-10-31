@@ -1,0 +1,11 @@
+Факты
+- URL, о котором сообщается: {{ url }}
+- Домен: {{ domain }}{% if domain_unicode %} ({{ domain_unicode }}){% endif %}
+
+- IP-адреса: {{ ips | join(", ") if ips else "не определены" }}
+- Впервые обнаружено: {{ first_seen }}
+- Наш номер дела: {{ case_number }}
+- Доказательства (снимки экрана, сохранённые файлы и их хеши): {{ evidence_url }}
+{% for label, digest in hashes %}
+- SHA-256 ({{ label }}): {{ digest }}
+{% endfor %}

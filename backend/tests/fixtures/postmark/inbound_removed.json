@@ -1,0 +1,54 @@
+{
+  "FromName": "Abuse Desk",
+  "MessageStream": "inbound",
+  "From": "abuse@registrar.example",
+  "FromFull": {
+    "Email": "abuse@registrar.example",
+    "Name": "Abuse Desk",
+    "MailboxHash": ""
+  },
+  "To": "\"Case\" <case+{{number}}@reply.example.test>",
+  "ToFull": [
+    {
+      "Email": "case+{{number}}@reply.example.test",
+      "Name": "Case",
+      "MailboxHash": "{{number}}"
+    }
+  ],
+  "Cc": "",
+  "CcFull": [],
+  "Bcc": "",
+  "BccFull": [],
+  "OriginalRecipient": "case+{{number}}@reply.example.test",
+  "Subject": "Re: [{{number_upper}}] Phishing report",
+  "MessageID": "{{message_id}}",
+  "ReplyTo": "",
+  "MailboxHash": "{{number}}",
+  "Date": "Tue, 8 Dec 2026 10:15:00 +0000",
+  "TextBody": "Hello,\nThe domain has been suspended (serverHold) following your report.\nRegards, Abuse Team\n\n> original report",
+  "HtmlBody": "<p>Hello,<br>The domain has been suspended (serverHold) following your report.<br>Regards, Abuse Team<br><br>> original report</p>",
+  "StrippedTextReply": "Hello,\nThe domain has been suspended (serverHold) following your report.\nRegards, Abuse Team",
+  "Tag": "",
+  "Headers": [
+    {
+      "Name": "X-Spam-Status",
+      "Value": "No"
+    },
+    {
+      "Name": "In-Reply-To",
+      "Value": "{{in_reply_to}}"
+    },
+    {
+      "Name": "References",
+      "Value": "{{in_reply_to}}"
+    }
+  ],
+  "Attachments": [
+    {
+      "Name": "ticket.txt",
+      "Content": "dGlja2V0IDEyMzQ=",
+      "ContentType": "text/plain",
+      "ContentLength": 11
+    }
+  ]
+}

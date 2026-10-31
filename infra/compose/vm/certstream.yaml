@@ -1,0 +1,39 @@
+# certstream-server-go on the VM (architecture.md §3; K85). Reference:
+# https://github.com/d-Rickyy-b/certstream-server-go/blob/v1.10.1/config.sample.yaml
+# The port is not published on the host; ct-consumer (lite stream) and Prometheus (/metrics)
+# connect over the compose network, which the browser network cannot reach.
+webserver:
+  listen_addr: "0.0.0.0"
+  listen_port: 8080
+  real_ip: false
+  whitelist: []
+  full_url: "/full-stream"
+  lite_url: "/"
+  domains_only_url: "/domains-only"
+  cert_path: ""
+  cert_key_path: ""
+  compression_enabled: false
+
+prometheus:
+  enabled: true
+  listen_addr: "0.0.0.0"
+  listen_port: 8080
+  metrics_url: "/metrics"
+  expose_system_metrics: false
+  real_ip: false
+  whitelist: []
+
+general:
+  disable_default_logs: false
+  drop_old_logs: true
+  # Larger client buffer than locally, so a busy ct-consumer is not dropped during bursts; the
+  # other buffers keep the sample defaults.
+  buffer_sizes:
+    websocket: 3000
+    ctlog: 1000
+    dispatcher: 10000
+  # No recovery: without a stored index it would download every log from index 0. Certificates
+  # issued while the stream is down (deploys, reboots) are missed; CZDS and permutations cover
+  # those names later.
+  recovery:
+    enabled: false

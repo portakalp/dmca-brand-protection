@@ -1,0 +1,51 @@
+Subject: [KLK-000123] Zgłoszenie naruszenia znaku towarowego: mintera-login.online (Trademark infringement report)
+
+Szanowny zespole ds. nadużyć,
+
+Piszemy w imieniu Mintera Bank w sprawie mintera-login.online. Strona bez zgody używa nazwy i wyglądu Mintera Bank, aby kierować jej klientów do innego serwisu finansowego, co narusza prawa Mintera Bank do znaku towarowego.
+Jako rejestrator tej domeny prosimy o jej zawieszenie lub podjęcie działań przewidzianych w Państwa polityce dotyczącej nadużyć.
+
+Strona mintera-login.online kopiuje stronę Mintera Bank (logo, układ strony, nazwa marki w domenie) i prosi odwiedzających o dane logowania lub płatności. Nasze porównanie wykazało 93% podobieństwa wizualnego do oficjalnej strony mintera.com. Domenę zarejestrowano 5 dni przed jej wykryciem. Strona nie jest prowadzona ani autoryzowana przez Mintera Bank.
+
+Fakty
+- Zgłaszany adres URL: https://mintera-login.online/signin
+- Domena: mintera-login.online
+- Adresy IP: 203.0.113.5, 203.0.113.6
+- Pierwsze wykrycie: 2026-11-10 09:30 UTC
+- Nasz numer referencyjny: KLK-000123
+- Dowody (zrzuty ekranu, zapisane pliki i ich skróty): https://evidence.example.test/e/TOKEN
+- SHA-256 (zrzut ekranu, komputer): aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+- SHA-256 (zrzut ekranu, telefon): bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+
+W dobrej wierze uważamy, że używanie znaków towarowych Mintera Bank na opisanej powyżej stronie nie jest autoryzowane przez właściciela znaków, jego przedstawiciela ani prawo. Informacje zawarte w tym zgłoszeniu są zgodne z naszą najlepszą wiedzą, a my jesteśmy upoważnieni do działania w imieniu Mintera Bank, właściciela tych znaków.
+
+Prosimy o odpowiedź na tę wiadomość z zachowaniem numeru KLK-000123 w temacie.
+
+Zespół ochrony marki, działający w imieniu Mintera Bank
+Odpowiedzi: case+klk-000123@reply.example.test
+
+---------- English version ----------
+
+Dear abuse team,
+
+We are writing on behalf of Mintera Bank about mintera-login.online. The website uses the Mintera Bank name and look without authorisation to lead its customers to a third-party financial service, which infringes Mintera Bank's trademark rights.
+As the registrar of this domain name, please suspend it or take the action your abuse policy provides.
+
+The website at mintera-login.online copies the Mintera Bank website (logo, layout, brand name in the domain) and asks visitors for their login or payment details. Our comparison found it 93% visually similar to the official site mintera.com. The domain was registered 5 days before we found it. It is not operated or authorised by Mintera Bank.
+
+Facts
+- Reported URL: https://mintera-login.online/signin
+- Domain: mintera-login.online
+- IP addresses: 203.0.113.5, 203.0.113.6
+- First seen: 2026-11-10 09:30 UTC
+- Our reference: KLK-000123
+- Evidence (screenshots, captured files and their hashes): https://evidence.example.test/e/TOKEN
+- SHA-256 of the desktop screenshot: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+- SHA-256 of the mobile screenshot: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+
+We have a good-faith belief that the use of the Mintera Bank trademarks on the website described above is not authorised by the trademark owner, its agent or the law. The information in this notice is accurate to the best of our knowledge, and we are authorised to act on behalf of Mintera Bank, the owner of the trademarks concerned.
+
+Please reply to this e-mail and keep KLK-000123 in the subject.
+
+Brand protection team, acting for Mintera Bank
+Replies: case+klk-000123@reply.example.test

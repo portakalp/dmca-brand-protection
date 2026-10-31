@@ -1,0 +1,11 @@
+Fakty
+- Zgłaszany adres URL: {{ url }}
+- Domena: {{ domain }}{% if domain_unicode %} ({{ domain_unicode }}){% endif %}
+
+- Adresy IP: {{ ips | join(", ") if ips else "nie ustalono" }}
+- Pierwsze wykrycie: {{ first_seen }}
+- Nasz numer referencyjny: {{ case_number }}
+- Dowody (zrzuty ekranu, zapisane pliki i ich skróty): {{ evidence_url }}
+{% for label, digest in hashes %}
+- SHA-256 ({{ label }}): {{ digest }}
+{% endfor %}

@@ -1,0 +1,2 @@
+LEGAL_REVIEW_REQUIRED
+W dobrej wierze uważamy, że używanie znaków towarowych {{ brand }} na opisanej powyżej stronie nie jest autoryzowane przez właściciela znaków, jego przedstawiciela ani prawo. Informacje zawarte w tym zgłoszeniu są zgodne z naszą najlepszą wiedzą, a my jesteśmy upoważnieni do działania w imieniu {{ brand }}, właściciela tych znaków.

@@ -1,0 +1,528 @@
+# Production stack on the worker VM kalkan-vm of the optional Google Cloud reference deployment
+# (infra/terraform/README.md; architecture.md §3, §22; K81-K85). To run Kalkan on your own
+# server without Google Cloud, use deploy/selfhost instead.
+# The deploy copies this file to /opt/kalkan/docker-compose.yml next to:
+#   .env      compose interpolation: REGISTRY, IMAGE_TAG (git SHA), CLOUDSQL_INSTANCE, GCP_PROJECT_ID;
+#             COMPOSE_PROFILES there turns on the profile services below
+#   app.env   non-secret settings shared by the application containers (vm/app.env + deploy lines)
+#   vm/       configuration files and scripts (infra/compose/vm)
+#   sql/      bootstrap_roles.sql
+# Secrets never live in these files: vm/bin/load-secrets.sh writes /run/kalkan/<service>.env (tmpfs)
+# from Secret Manager, and each container gets only its own (vm/secrets.map). REDIS_URL is one of
+# them: Redis requires a password (users from /run/kalkan/redis/users.acl).
+# Google credentials (the VM service account, through the metadata server) reach only the
+# services with a fixed address on the default network below: cloud-sql-proxy, worker-default,
+# worker-ai and ops; vm/bin/firewall.sh rejects every other container (K82). A `docker compose
+# run` container of these services asks for the same address and fails while the service runs
+# ("Address already in use"), so their CLI commands use `docker compose exec`; one-off containers
+# of the other services (migrate, psql) get no token.
+# Every env_file is optional and every variable has a default, so `docker compose -f
+# infra/compose/docker-compose.vm.yml config` also works outside the VM (CI).
+#
+# Optional profiles: browser (on once the proxy-map secret has a version), ops, ai; tools =
+# one-off containers (migrate, psql) that deploy.sh and the operator run.
+#
+# Memory limits (e2-standard-2, 8 GiB): always-on services 3.9 GiB; with browser, ai and ops
+# 6.8 GiB; deploy one-offs (migrate, psql) add 0.6 GiB.
+name: kalkan
+
+# Docker's gcplogs driver sends each line to Cloud Logging (log gcplogs-docker-driver) with the
+# compose service name in jsonPayload.container.metadata; `docker logs` keeps working from the
+# local dual-logging cache.
+x-logging: &logging
+  driver: gcplogs
+  options:
+    labels: com.docker.compose.service
+    cache-max-size: "10m"
+    cache-max-file: "3"
+
+x-backend: &backend
+  image: ${REGISTRY:-europe-central2-docker.pkg.dev/my-gcp-project/kalkan}/backend:${IMAGE_TAG:-dev}
+  restart: unless-stopped
+  logging: *logging
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  # Cloud SQL Auth Proxy (public IP, connector enforcement; credentials of the VM service account).
+  # Reachable only on the compose network as cloud-sql-proxy:5432.
+  cloud-sql-proxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.26.0-alpine
+    restart: unless-stopped
+    networks:
+      default:
+        ipv4_address: 172.31.251.10
+    command:
+      - --address=0.0.0.0
+      - --port=5432
+      - --health-check
+      - --structured-logs
+      - --exit-zero-on-sigterm
+      - --max-sigterm-delay=10s
+      - ${CLOUDSQL_INSTANCE:-my-gcp-project:europe-central2:kalkan-db}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/readiness"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    mem_limit: 128m
+    cpus: 0.25
+    logging: *logging
+
+  redis:
+    image: redis:7.4.11-bookworm
+    # Redis only carries jobs; state lives in Postgres (architecture.md §2). Writes fail instead of
+    # the container being killed when the memory cap is reached. Users come from the ACL file that
+    # vm/bin/load-secrets.sh renders (hashes only): default off, kalkan for the application
+    # containers, browser for worker-browser.
+    command: ["redis-server", "--aclfile", "/etc/redis/users.acl", "--save", "", "--appendonly", "no", "--maxmemory", "192mb", "--maxmemory-policy", "noeviction"]
+    restart: unless-stopped
+    volumes:
+      - /run/kalkan/redis:/etc/redis:ro
+    networks:
+      default: {}
+      # The browser worker reaches Redis at this fixed address; vm/bin/firewall.sh allows only it.
+      kalkan-browser:
+        ipv4_address: 172.31.250.10
+    healthcheck:
+      # Unauthenticated: NOAUTH also proves that Redis answers, and no password sits in the
+      # container's configuration.
+      test: ["CMD-SHELL", "redis-cli ping | grep -qE 'PONG|NOAUTH'"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    mem_limit: 256m
+    cpus: 0.5
+    logging: *logging
+
+  certstream:
+    image: 0rickyy0/certstream-server-go:v1.10.1
+    restart: unless-stopped
+    volumes:
+      - ./vm/certstream.yaml:/app/config/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/example.json || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    mem_limit: 512m
+    cpus: 0.5
+    logging: *logging
+
+  worker-default:
+    <<: *backend
+    command: ["python", "-m", "kalkan.workers", "default"]
+    env_file:
+      - path: app.env
+        required: false
+      - path: /run/kalkan/worker-default.env
+        required: false
+        format: raw
+    networks:
+      default:
+        ipv4_address: 172.31.251.11
+    volumes:
+      - artifacts-tmp:/artifacts-tmp
+    depends_on:
+      cloud-sql-proxy:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Dramatiq's Prometheus exporter answers once the worker process has booted.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9191/', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    # Lets short jobs finish on redeploys; long scans (CZDS, permutations) are cut off anyway.
+    stop_grace_period: 60s
+    mem_limit: 1g
+    cpus: 1.0
+
+  scheduler:
+    <<: *backend
+    command: ["python", "-m", "kalkan.scheduler"]
+    env_file:
+      - path: app.env
+        required: false
+      - path: /run/kalkan/scheduler.env
+        required: false
+        format: raw
+    depends_on:
+      cloud-sql-proxy:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # The heartbeat job touches this file every minute.
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/kalkan-scheduler.heartbeat') > 150)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+    mem_limit: 384m
+    cpus: 0.5
+
+  ct-consumer:
+    <<: *backend
+    command: ["python", "-m", "kalkan.discovery.ct"]
+    env_file:
+      - path: app.env
+        required: false
+      - path: /run/kalkan/ct-consumer.env
+        required: false
+        format: raw
+    depends_on:
+      cloud-sql-proxy:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      certstream:
+        condition: service_healthy
+    healthcheck:
+      # The consumer touches this file every 30 seconds while it runs.
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/kalkan-ct-consumer.heartbeat') > 90)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+    mem_limit: 512m
+    cpus: 1.0
+
+  # Playwright worker (architecture.md §10). No database URL, no cloud credentials
+  # (K6): only its secrets file (REDIS_URL as Redis user browser, PROXY_MAP, SENTRY_DSN) and the
+  # settings below (PROXY_DEFAULT_COUNTRY and PROXY_DAILY_GB_LIMIT keep their code defaults;
+  # APP_BASE_URL is the only address the monthly report's print may open, §21). It
+  # sits on the browser network alone; vm/bin/firewall.sh rejects private, link-local and metadata
+  # destinations from there, except Redis, and lets only Prometheus reach it (:9191).
+  worker-browser:
+    image: ${REGISTRY:-europe-central2-docker.pkg.dev/my-gcp-project/kalkan}/browser:${IMAGE_TAG:-dev}
+    profiles: ["browser"]
+    restart: unless-stopped
+    command: ["python", "-m", "kalkan.workers", "browser"]
+    user: pwuser
+    init: true
+    environment:
+      ENV: prod
+      LOG_LEVEL: INFO
+      APP_BASE_URL: ${APP_BASE_URL:-}
+    env_file:
+      - path: /run/kalkan/worker-browser.env
+        required: false
+        format: raw
+    # DNS: Docker's embedded resolver forwards lookups to the VM's resolver from the host's
+    # namespace, so the firewall does not apply to them. Do not set `dns:` here: servers given
+    # that way are queried from the container's namespace, through the firewall.
+    networks:
+      kalkan-browser:
+        ipv4_address: 172.31.250.11
+    volumes:
+      - artifacts-tmp:/artifacts-tmp
+    cap_drop:
+      - ALL
+    # Chromium runs with its sandbox (K6), which needs user namespaces: Docker's default seccomp
+    # profile plus clone, unshare, setns and chroot (vm/seccomp-chromium.json). Never --no-sandbox.
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./vm/seccomp-chromium.json
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Dramatiq's Prometheus exporter answers once the worker process has booted.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9191/', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    mem_limit: 2g
+    cpus: 1.5
+    logging: *logging
+
+  # Claude calls (architecture.md §13).
+  worker-ai:
+    <<: *backend
+    profiles: ["ai"]
+    command: ["python", "-m", "kalkan.workers", "ai"]
+    env_file:
+      - path: app.env
+        required: false
+      - path: /run/kalkan/worker-ai.env
+        required: false
+        format: raw
+    networks:
+      default:
+        ipv4_address: 172.31.251.12
+    depends_on:
+      cloud-sql-proxy:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9191/', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    mem_limit: 512m
+    cpus: 0.5
+
+  # Internal operations panel (architecture.md §19): localhost only, reached through an
+  # IAP SSH tunnel (infra/terraform/README.md). On with COMPOSE_PROFILES=ops.
+  ops:
+    <<: *backend
+    profiles: ["ops"]
+    command: ["uvicorn", "kalkan.ops.main:app", "--host", "0.0.0.0", "--port", "8081", "--no-access-log"]
+    env_file:
+      - path: app.env
+        required: false
+      - path: /run/kalkan/ops.env
+        required: false
+        format: raw
+    networks:
+      default:
+        ipv4_address: 172.31.251.13
+    ports:
+      - "127.0.0.1:8081:8081"
+    depends_on:
+      cloud-sql-proxy:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    mem_limit: 384m
+    cpus: 0.5
+
+  # One-off: `docker compose run --rm migrate` (deploy.sh), as kalkan_owner.
+  migrate:
+    <<: *backend
+    profiles: ["tools"]
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      ENV: prod
+      LOG_LEVEL: INFO
+    env_file:
+      - path: /run/kalkan/migrate.env
+        required: false
+        format: raw
+    depends_on:
+      cloud-sql-proxy:
+        condition: service_healthy
+    mem_limit: 512m
+    cpus: 1.0
+
+  # One-off psql as kalkan_owner through the proxy: vm/bin/db-bootstrap.sh and the operator
+  # (`docker compose run --rm psql`). Its output stays out of Cloud Logging.
+  psql:
+    image: postgres:16.15-alpine
+    profiles: ["tools"]
+    restart: "no"
+    command: ["psql"]
+    environment:
+      PGHOST: cloud-sql-proxy
+      PGPORT: "5432"
+      PGUSER: kalkan_owner
+      PGDATABASE: kalkan
+      # The proxy encrypts the connection to Cloud SQL; the hop to it is local.
+      PGSSLMODE: disable
+    env_file:
+      - path: /run/kalkan/psql.env
+        required: false
+        format: raw
+    volumes:
+      - ./sql:/sql:ro
+    depends_on:
+      cloud-sql-proxy:
+        condition: service_healthy
+    mem_limit: 128m
+    cpus: 0.25
+    logging:
+      driver: none
+
+  # Monitoring (architecture.md §23; K83, K173). The UIs listen on 127.0.0.1 only (IAP SSH
+  # tunnel). Alert rules: vm/prometheus/rules; dashboards: vm/grafana/dashboards; Uptime Kuma's
+  # monitors are added by hand.
+  prometheus:
+    image: prom/prometheus:v3.13.4
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=2GB
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./vm/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    networks:
+      # The default route and the published port stay on the app network.
+      default:
+        gw_priority: 1
+      # Scrapes worker-browser; vm/bin/firewall.sh lets only this address reach it (:9191).
+      kalkan-browser:
+        ipv4_address: 172.31.250.12
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    mem_limit: 512m
+    cpus: 0.5
+    logging: *logging
+
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    restart: unless-stopped
+    # load-secrets.sh renders the configuration (any SMTP relay from ALERT_SMTP_*, recipient
+    # OPS_ALERT_EMAIL; vm/bin/render-alertmanager.sh) into /run/kalkan/alertmanager. Single node: no cluster listener.
+    command:
+      - --config.file=/etc/alertmanager/kalkan/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --cluster.listen-address=
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - /run/kalkan/alertmanager:/etc/alertmanager/kalkan:ro
+      - alertmanager-data:/alertmanager
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9093/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    mem_limit: 128m
+    cpus: 0.25
+    logging: *logging
+
+  # The VM's disk, memory and CPU for Prometheus (DiskAlmostFull). The host's root is mounted
+  # read only; no published port, no host network.
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --collector.disable-defaults
+      - --collector.filesystem
+      - --collector.meminfo
+      - --collector.cpu
+      - --collector.loadavg
+      - --collector.diskstats
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|run|sys|var/lib/docker/.+)($|/)
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /:/host:ro,rslave
+    mem_limit: 64m
+    cpus: 0.1
+    logging: *logging
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    # GF_SECURITY_ADMIN_PASSWORD (grafana-admin-password); Grafana applies it when it creates
+    # the admin user on first start.
+    env_file:
+      - path: /run/kalkan/grafana.env
+        required: false
+        format: raw
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./vm/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./vm/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./vm/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    mem_limit: 256m
+    cpus: 0.5
+    logging: *logging
+
+  # Slim (no embedded MariaDB or Chromium) and rootless; SQLite skips the database setup page.
+  uptime-kuma:
+    image: louislam/uptime-kuma:2.5.6-slim-rootless
+    restart: unless-stopped
+    environment:
+      UPTIME_KUMA_DB_TYPE: sqlite
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - uptime-kuma-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+    mem_limit: 256m
+    cpus: 0.5
+    logging: *logging
+
+volumes:
+  # Screenshots and HTML from worker-browser, read and deleted by worker-default (§10). A host
+  # directory owned by uid 10001, the user of both images (deploy.sh creates it).
+  artifacts-tmp:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/kalkan/artifacts-tmp
+  prometheus-data:
+  alertmanager-data:
+  grafana-data:
+  uptime-kuma-data:
+
+# Docker hands out addresses from ip_range only, so no container ever takes one of the fixed
+# addresses (below .128) while its service is being recreated.
+networks:
+  # Every service except worker-browser (K82): fixed bridge name and subnet, so vm/bin/firewall.sh
+  # can allow the metadata server to the four fixed addresses above only.
+  default:
+    driver: bridge
+    enable_ipv6: false
+    driver_opts:
+      com.docker.network.bridge.name: br-kalkan-app
+    ipam:
+      config:
+        - subnet: 172.31.251.0/24
+          ip_range: 172.31.251.128/25
+          gateway: 172.31.251.1
+  # The browser worker's network (K82): fixed bridge name and subnet for the iptables rules.
+  # Fixed addresses: redis .10, worker-browser .11, prometheus .12.
+  kalkan-browser:
+    name: kalkan-browser
+    driver: bridge
+    enable_ipv6: false
+    driver_opts:
+      com.docker.network.bridge.name: br-kalkan-brw
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
+          ip_range: 172.31.250.128/25
+          gateway: 172.31.250.1

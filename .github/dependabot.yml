@@ -1,0 +1,84 @@
+version: 2
+updates:
+  # The uv ecosystem updates backend/uv.lock; the pip ecosystem would not.
+  # Major upgrades are deliberate, hand-made changes, not automatic PRs.
+  - package-ecosystem: uv
+    directory: /backend
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # Bumped by hand together with the Playwright image and CHROMIUM_MAJOR.
+      - dependency-name: "playwright"
+    groups:
+      python-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /infra/docker
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # The backend targets Python 3.12 (requires-python >=3.12,<3.13); 3.13+ is a minor
+      # version bump for Dependabot.
+      - dependency-name: "python"
+        versions: [">=3.13"]
+      # Bumped by hand together with the playwright package.
+      - dependency-name: "mcr.microsoft.com/playwright/python"
+
+  # Postgres stays on 16 (the reference deployment uses Cloud SQL 16) and Redis on 7, in the
+  # local, self-host and VM compose files alike; major upgrades are done by hand.
+  - package-ecosystem: docker-compose
+    directories: [/infra/compose, /deploy/selfhost]
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # Updates the google/random provider constraints and .terraform.lock.hcl.
+  - package-ecosystem: terraform
+    directory: /infra/terraform
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      terraform-providers:
+        update-types: [minor, patch]
+
+  # Edge Worker. Each @cloudflare/vitest-plugin release pins one exact wrangler, so the two
+  # always move in the same PR.
+  - package-ecosystem: npm
+    directory: /infra/cloudflare
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      cloudflare:
+        patterns: ["wrangler", "@cloudflare/*"]
+      edge-minor-and-patch:
+        update-types: [minor, patch]
+
+  # Customer panel (Next.js).
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      web-minor-and-patch:
+        update-types: [minor, patch]

@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars (git-ignored) and fill in. See README.md.
+project_id      = "my-gcp-project"
+domain          = "example.com"
+ops_alert_email = "alerts@example.com"
+
+# The GitHub repository whose deploy workflow may impersonate the deploy service account (wif.tf).
+github_repo          = "my-org/kalkan"
+github_repository_id = "123456789" # gh api repos/portakalp/dmca-brand-protection --jq .id
+github_deployer_id   = "987654321" # gh api users/LOGIN --jq .id
+
+# Defaults; change only if they differ for you.
+# region                 = "europe-central2"
+# zone                   = "europe-central2-a"
+# github_deploy_workflow = ".github/workflows/deploy.yml"
+# db_password_version    = 1 # bump to rotate the database passwords
+# redis_password_version = 1 # bump to rotate the VM Redis passwords

@@ -1,0 +1,2 @@
+LEGAL_REVIEW_REQUIRED
+This message withdraws our earlier report only. We are authorised to act on behalf of {{ brand }}.

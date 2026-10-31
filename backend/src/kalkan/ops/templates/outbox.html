@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Outbox · Kalkan ops{% endblock %}
+{% block content %}
+<h1>Outbox</h1>
+<p class="filters">
+  <a href="/outbox"{% if not chosen %} class="active"{% endif %}>All</a>
+  {% for status in statuses %} · <a href="/outbox?status={{ status.value }}"{% if chosen == status %} class="active"{% endif %}>{{ status.value.replace("_", " ") }}</a>{% endfor %}
+</p>
+<table>
+  <thead><tr><th>Updated</th><th>Case</th><th>Channel</th><th>Recipient</th><th>Lang</th><th>Status</th><th>Text</th></tr></thead>
+  <tbody>
+  {% for notice, number, domain in rows %}
+    <tr>
+      <td>{{ notice.updated_at|when }}</td>
+      <td><a href="/cases/{{ notice.case_id }}">{{ number }}</a><br><span class="mono muted">{{ domain }}</span></td>
+      <td>{{ notice.channel.value }} · {{ notice.method.value.replace("_", " ") }}{% if notice.escalation_level %} · level {{ notice.escalation_level }}{% endif %}</td>
+      <td class="mono">{{ notice.recipient or "—" }}</td>
+      <td>{{ notice.language.value }}</td>
+      <td>{% if notice.dry_run %}<span class="pill">dry run</span> {% endif %}<strong>{{ notice.status.value.replace("_", " ") }}</strong>{% if notice.blocked_reason %}: {{ notice.blocked_reason.value.replace("_", " ") }}{% endif %}{% if notice.dry_run and notice.provider_message_id %} (preview sent){% endif %}{% if notice.failure_reason %}<br><span class="muted">{{ notice.failure_reason|short(80) }}</span>{% endif %}</td>
+      <td><a href="/outbox/{{ notice.id }}">{{ notice.template.value }}</a>{% if notice.explanation_source %} <span class="muted">({{ notice.explanation_source.value }})</span>{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="muted">No notices.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

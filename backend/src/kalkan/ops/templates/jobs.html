@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Failed jobs · Kalkan ops{% endblock %}
+{% block content %}
+<h1>Failed jobs <span class="muted">last 24 hours</span></h1>
+<p class="muted">The reconciler leaves these cases alone until the job is re-queued here.</p>
+<table>
+  <thead><tr><th>At</th><th>Case</th><th>Customer</th><th>Job</th><th>Error</th><th>State</th><th></th></tr></thead>
+  <tbody>
+  {% for job in jobs %}
+    <tr>
+      <td>{{ job.at|when }}</td>
+      <td><a href="/cases/{{ job.case_id }}">{{ job.number }}</a><br><span class="mono">{{ job.domain }}</span></td>
+      <td>{{ job.customer }}</td>
+      <td class="mono">{{ job.job }}</td>
+      <td class="mono">{{ job.error|short(200) }}</td>
+      <td>{{ job.state.value }}</td>
+      <td>
+        {% if job.requeued_at %}<span class="muted">re-queued {{ job.requeued_at|when }}</span>
+        {% elif job.requeueable %}<span class="muted">{{ job.requeueable }}</span>
+        {% else %}
+        <form method="post" action="/jobs/{{ job.event_id }}/requeue" class="inline">
+          <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+          <button type="submit">Re-queue</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="muted">No failed jobs in the last 24 hours.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

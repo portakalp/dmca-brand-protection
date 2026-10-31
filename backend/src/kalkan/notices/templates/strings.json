@@ -1,0 +1,80 @@
+{
+  "subjects": {
+    "phishing": {
+      "en": "Phishing report",
+      "tr": "Oltalama bildirimi",
+      "pl": "Zgłoszenie phishingu",
+      "ru": "Сообщение о фишинге"
+    },
+    "trademark": {
+      "en": "Trademark infringement report",
+      "tr": "Marka ihlali bildirimi",
+      "pl": "Zgłoszenie naruszenia znaku towarowego",
+      "ru": "Сообщение о нарушении товарного знака"
+    },
+    "retraction": {
+      "en": "Withdrawal of report",
+      "tr": "Bildirimin geri çekilmesi",
+      "pl": "Wycofanie zgłoszenia",
+      "ru": "Отзыв сообщения"
+    }
+  },
+  "screenshot": {
+    "en": "{profile} screenshot",
+    "tr": "{profile} ekran görüntüsü",
+    "pl": "zrzut ekranu, {profile}",
+    "ru": "снимок экрана, {profile}"
+  },
+  "profiles": {
+    "en": {
+      "desktop": "desktop",
+      "mobile": "mobile"
+    },
+    "tr": {
+      "desktop": "masaüstü",
+      "mobile": "mobil"
+    },
+    "pl": {
+      "desktop": "komputer",
+      "mobile": "telefon"
+    },
+    "ru": {
+      "desktop": "компьютер",
+      "mobile": "телефон"
+    }
+  },
+  "copied": {
+    "en": {
+      "logo": "logo",
+      "layout": "layout",
+      "text": "text",
+      "favicon": "favicon",
+      "colors": "colours",
+      "brand_name_in_domain": "brand name in the domain"
+    },
+    "tr": {
+      "logo": "logo",
+      "layout": "sayfa düzeni",
+      "text": "metin",
+      "favicon": "site simgesi",
+      "colors": "renkler",
+      "brand_name_in_domain": "alan adında marka adı"
+    },
+    "pl": {
+      "logo": "logo",
+      "layout": "układ strony",
+      "text": "tekst",
+      "favicon": "ikona strony",
+      "colors": "kolory",
+      "brand_name_in_domain": "nazwa marki w domenie"
+    },
+    "ru": {
+      "logo": "логотип",
+      "layout": "макет",
+      "text": "текст",
+      "favicon": "значок сайта",
+      "colors": "цвета",
+      "brand_name_in_domain": "название бренда в домене"
+    }
+  }
+}

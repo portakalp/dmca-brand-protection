@@ -1,0 +1,2 @@
+LEGAL_REVIEW_REQUIRED
+W dobrej wierze uważamy, że korzystanie z opisanej powyżej strony nie jest autoryzowane przez {{ brand }}, jej przedstawiciela ani prawo oraz że służy ona do wprowadzania użytkowników w błąd i zbierania ich danych logowania lub płatności. Informacje zawarte w tym zgłoszeniu są zgodne z naszą najlepszą wiedzą, a my jesteśmy upoważnieni do działania w imieniu {{ brand }}.

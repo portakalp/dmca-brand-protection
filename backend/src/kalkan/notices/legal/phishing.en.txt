@@ -1,0 +1,2 @@
+LEGAL_REVIEW_REQUIRED
+We have a good-faith belief that the use of the website described above is not authorised by {{ brand }}, its agent or the law, and that it is used to deceive users and collect their credentials or payment data. The information in this notice is accurate to the best of our knowledge, and we are authorised to act on behalf of {{ brand }}.

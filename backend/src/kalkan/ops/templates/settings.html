@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Settings · Kalkan ops<section class="card">
+  <h2>Blocked notices</h2>
+  <p class="muted">After a legal text is approved and deployed, or a gate was lifted outside this panel: every approved case with a blocked reason is planned again and every gate is checked anew.</p>
+  <form method="post" action="/settings/recheck-blocked" class="inline">
+    <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+    <label class="check"><input type="checkbox" name="confirm" value="yes" required> confirm</label>
+    <button type="submit" class="secondary">Re-check blocked cases</button>
+  </form>
+</section>
+{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+<section class="card">
+  <h2>Environment (read only)</h2>
+  <dl class="facts">
+    <dt>NOTICES_DRY_RUN</dt><dd><span class="pill{% if not notices_dry_run %} on{% endif %}">{{ "true" if notices_dry_run else "false" }}</span> <span class="muted">every notice is a preview while true</span></dd>
+    <dt>DRY_RUN_REDIRECT_EMAIL</dt><dd class="mono">{{ dry_run_redirect_email or "— (not set)" }}</dd>
+  </dl>
+</section>
+<section class="card">
+  <h2>Global settings</h2>
+  <table class="settings">
+    <thead><tr><th>Setting</th><th>Value</th><th>Change</th><th>Last change</th></tr></thead>
+    <tbody>
+    {% for key, spec in specs.items() %}
+      {% set value = values[key] %}
+      {% set row = rows.get(key) %}
+      <tr id="setting-{{ key }}">
+        <td><span class="mono">{{ key }}</span><br><span class="muted">{{ spec.help }}</span></td>
+        <td>
+          {% if spec.kind == "switch" %}<span class="pill{% if value %} on{% endif %}">{{ "on" if value else "off" }}</span>
+          {% elif spec.kind == "ratio" %}<span class="mono">{{ value }}</span>
+          {% else %}{% for channel, limit in value.items() %}<span class="mono">{{ channel }} {{ limit }}</span>{% if not loop.last %} · {% endif %}{% endfor %}{% endif %}
+        </td>
+        <td>
+          <form method="post" action="/settings/{{ key }}" class="inline">
+            <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+            {% if spec.kind == "switch" %}
+              <input type="hidden" name="value" value="{{ 'false' if value else 'true' }}">
+              <label class="check"><input type="checkbox" name="confirm" value="yes" required> confirm</label>
+              <button type="submit" class="secondary">Turn {{ "off" if value else "on" }}</button>
+            {% elif spec.kind == "ratio" %}
+              <input type="number" name="value" value="{{ value }}" min="0" max="1" step="0.01" aria-label="{{ key }}">
+              <button type="submit" class="secondary">Save</button>
+            {% else %}
+              {% for channel, limit in value.items() %}
+              <label>{{ channel }} <input type="number" name="limit_{{ channel }}" value="{{ limit }}" min="0" max="10000" step="1"></label>
+              {% endfor %}
+              <button type="submit" class="secondary">Save</button>
+            {% endif %}
+          </form>
+        </td>
+        <td class="muted">{% if row %}{{ row.updated_by or "migration" }} · {{ row.updated_at|when }}{% else %}default{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+<section class="card">
+  <h2>Blocked notices</h2>
+  <p class="muted">After a legal text is approved and deployed, or a gate was lifted outside this panel: every approved case with a blocked reason is planned again and every gate is checked anew.</p>
+  <form method="post" action="/settings/recheck-blocked" class="inline">
+    <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+    <label class="check"><input type="checkbox" name="confirm" value="yes" required> confirm</label>
+    <button type="submit" class="secondary">Re-check blocked cases</button>
+  </form>
+</section>
+{% endblock %}

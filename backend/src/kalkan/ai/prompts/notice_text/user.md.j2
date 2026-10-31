@@ -1,0 +1,20 @@
+Target language: {{ language }}
+Brand: {{ brand }}
+Official domain of the brand: {{ official_domain or "unknown" }}
+Case domain: {{ domain }}
+Host of the reported page: {{ final_host }}
+Category of the website: {{ category }}
+Elements copied from the brand: {{ copied or "none recorded" }}
+Signals measured by our code:
+{% for name, value in signals %}
+- {{ name }}: {{ value }}
+{% else %}
+- none
+{% endfor %}
+Domain registered on: {{ registered_on or "unknown" }}
+First seen by us: {{ first_seen }}
+IP addresses: {{ ips or "unknown" }}
+<untrusted_registration_data>
+Registrar: {{ registrar or "unknown" }}
+Hosting organisation: {{ hosting_org or "unknown" }}
+</untrusted_registration_data>

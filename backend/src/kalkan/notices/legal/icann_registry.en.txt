@@ -1,0 +1,2 @@
+LEGAL_REVIEW_REQUIRED
+Under section 4.2 of Specification 6 of the ICANN Registry Agreement (in force since 5 April 2024): "Where a Registry Operator reasonably determines, based on actionable evidence, that a registered domain name in the TLD is being used for DNS Abuse, Registry Operator must promptly take the appropriate mitigation action(s) that are reasonably necessary to contribute to stopping, or otherwise disrupting, the domain name from being used for DNS Abuse." Phishing is DNS Abuse under that agreement; the evidence is linked above.

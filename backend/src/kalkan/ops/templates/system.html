@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}System · Kalkan ops{% endblock %}
+{% block content %}
+<h1>System</h1>
+<div class="tiles">
+  <section class="card tile">
+    <h2>AI spend · {{ month }}</h2>
+    {% if ai.calls %}<p class="big">${{ "%.2f"|format(ai.cost_usd) }} <span class="muted">of ${{ ai_budget }}</span></p><p class="muted">{{ ai.calls }} calls</p>
+    {% else %}<p class="big muted">—</p><p class="muted">No AI calls yet.</p>{% endif %}
+  </section>
+  <section class="card tile">
+    <h2>Proxy traffic · {{ month }}</h2>
+    {% if proxy is none %}<p class="big muted">—</p><p class="muted">Redis does not answer.</p>
+    {% elif proxy[0] == 0 %}<p class="big muted">—</p><p class="muted">No browser traffic yet.</p>
+    {% else %}<p class="big">{{ "%.2f"|format(proxy[0]) }} GB</p><p class="muted">today {{ "%.2f"|format(proxy[1]) }} of {{ proxy_limit }} GB</p>{% endif %}
+  </section>
+  <section class="card tile">
+    <h2>Outbox</h2>
+    <p class="big{% if not stuck_outbox %} muted{% endif %}">{{ stuck_outbox }}</p><p class="muted">rows the dispatcher gave up on</p>
+  </section>
+</div>
+<section class="card">
+  <h2>Queues</h2>
+  {% if queues is none %}<p class="flash error">Redis does not answer.</p>
+  {% else %}
+  <table>
+    <thead><tr><th>Queue</th><th>Waiting or running</th><th>Delayed</th><th>Dead letters</th></tr></thead>
+    <tbody>{% for queue in queues %}<tr><td class="mono">{{ queue.name }}</td><td>{{ queue.waiting }}</td><td>{{ queue.delayed }}</td><td>{{ queue.dead }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

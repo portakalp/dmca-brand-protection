@@ -1,0 +1,38 @@
+# Install once (from the repository root): uv run --project backend pre-commit install
+# ruff and mypy run through uv so they use the versions pinned in backend/uv.lock.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+        # Vendored upstream data stays byte-identical.
+        exclude: ^backend/src/kalkan/discovery/data/
+      - id: trailing-whitespace
+        # Vendored upstream data stays byte-identical.
+        exclude: ^backend/src/kalkan/discovery/data/
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff
+        entry: uv run --directory backend ruff check --fix .
+        language: system
+        files: ^backend/.*\.pyi?$
+        pass_filenames: false
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --directory backend ruff format .
+        language: system
+        files: ^backend/.*\.pyi?$
+        pass_filenames: false
+      - id: mypy
+        name: mypy
+        entry: uv run --directory backend mypy
+        language: system
+        files: ^backend/.*\.pyi?$
+        pass_filenames: false

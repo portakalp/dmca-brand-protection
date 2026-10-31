@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Customers · Kalkan ops{% endblock %}
+{% block content %}
+<h1>Customers</h1>
+<table>
+  <thead><tr><th>Name</th><th>Slug</th><th>Status</th><th>Brands</th><th>Flags</th><th>LOA</th></tr></thead>
+  <tbody>
+  {% for customer, brands in rows %}
+    <tr>
+      <td><a href="/customers/{{ customer.id }}">{{ customer.name }}</a></td>
+      <td class="mono">{{ customer.slug }}</td>
+      <td>{{ customer.status.value }}</td>
+      <td>{{ brands }}</td>
+      <td>
+        {% if customer.is_demo %}<span class="pill">demo</span>{% endif %}
+        {% if customer.monitor_only %}<span class="pill">monitor only</span>{% endif %}
+        {% if customer.is_test %}<span class="pill">test</span>{% endif %}
+        {% if customer.dry_run %}<span class="pill">dry-run</span>{% endif %}
+        <span class="pill{% if customer.sending_enabled %} on{% endif %}">sending {{ "on" if customer.sending_enabled else "off" }}</span>
+      </td>
+      <td>{{ customer.loa_signed_at|when if customer.loa_signed_at else "—" }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">No customers yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<section class="card narrow">
+  <h2>New customer</h2>
+  <p class="muted">Starts as <strong>trial</strong> with dry-run on and sending off.</p>
+  <form method="post" action="/customers" class="stack">
+    <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+    <label>Name <input name="name" required></label>
+    <label>Slug <input name="slug" placeholder="from the name" pattern="[a-z0-9]+(-[a-z0-9]+)*"></label>
+    <label>Alert e-mail <input type="email" name="alert_email"></label>
+    <label>Time zone <input name="timezone" value="UTC"></label>
+    <label class="check"><input type="checkbox" name="monitor_only"> Monitor only (no notices, not even previews)</label>
+    <button type="submit">Create customer</button>
+  </form>
+</section>
+{% endblock %}

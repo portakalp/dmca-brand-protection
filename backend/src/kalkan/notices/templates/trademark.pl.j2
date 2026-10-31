@@ -1,0 +1,27 @@
+Szanowny zespole ds. nadużyć,
+
+Piszemy w imieniu {{ brand }} w sprawie {{ domain }}. Strona bez zgody używa nazwy i wyglądu {{ brand }}, aby kierować jej klientów do innego serwisu finansowego, co narusza prawa {{ brand }} do znaku towarowego.
+{% if channel == "registrar" %}
+Jako rejestrator tej domeny prosimy o jej zawieszenie lub podjęcie działań przewidzianych w Państwa polityce dotyczącej nadużyć.
+{% elif channel == "registry" %}
+Jako operator rejestru .{{ tld }} prosimy o podjęcie działań przewidzianych w Państwa polityce lub przekazanie domeny jej rejestratorowi.
+{% elif channel == "hosting" %}
+Jako dostawca hostingu tej strony prosimy o usunięcie treści lub wyłączenie usługi.
+{% elif channel == "google" %}
+Prosimy o dodanie tego adresu URL do Google Safe Browsing.
+{% endif %}
+
+{{ explanation }}
+
+{% include "_facts.pl.j2" %}
+
+{{ legal }}
+{% if icann %}
+
+{{ icann }}
+{% endif %}
+
+Prosimy o odpowiedź na tę wiadomość z zachowaniem numeru {{ case_number }} w temacie.
+
+Zespół ochrony marki, działający w imieniu {{ brand }}
+Odpowiedzi: {{ reply_to }}

@@ -1,0 +1,27 @@
+Dear abuse team,
+
+We are writing on behalf of {{ brand }} about {{ domain }}. The website uses the {{ brand }} name and look without authorisation to lead its customers to a third-party financial service, which infringes {{ brand }}'s trademark rights.
+{% if channel == "registrar" %}
+As the registrar of this domain name, please suspend it or take the action your abuse policy provides.
+{% elif channel == "registry" %}
+As the registry operator of .{{ tld }}, please take the mitigation action your policy provides, or refer the domain to its registrar.
+{% elif channel == "hosting" %}
+As the provider hosting this website, please remove the content or disable the service.
+{% elif channel == "google" %}
+Please add this URL to Google Safe Browsing.
+{% endif %}
+
+{{ explanation }}
+
+{% include "_facts.en.j2" %}
+
+{{ legal }}
+{% if icann %}
+
+{{ icann }}
+{% endif %}
+
+Please reply to this e-mail and keep {{ case_number }} in the subject.
+
+Brand protection team, acting for {{ brand }}
+Replies: {{ reply_to }}

@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}{{ customer.name }} · Kalkan ops{% endblock %}
+{% block content %}
+<h1>{{ customer.name }} <span class="muted mono">{{ customer.slug }}</span></h1>
+<dl class="facts">
+  <dt>Status</dt><dd>{{ customer.status.value }}</dd>
+  <dt>Alert e-mail</dt><dd>{{ customer.alert_email or "—" }}</dd>
+  <dt>Time zone</dt><dd>{{ customer.timezone }}</dd>
+  <dt>Created</dt><dd>{{ customer.created_at|when }}</dd>
+  <dt>Whitelist</dt><dd>{% for kind, count in whitelist %}{{ kind.value }} {{ count }}{% if not loop.last %} · {% endif %}{% else %}empty{% endfor %}</dd>
+</dl>
+{% if customer.is_demo %}<p class="flash">The demo workspace is frozen: no jobs run for it.</p>{% endif %}
+
+<section class="card">
+  <h2>Sending flags</h2>
+  <p class="muted">Every change needs the box ticked and is written to the audit log. Effective dry-run: global NOTICES_DRY_RUN ({{ "on" if notices_dry_run else "off" }}) or the customer's dry-run or test flag.</p>
+  <table class="flags">
+    <thead><tr><th>Flag</th><th>Now</th><th>Change</th></tr></thead>
+    <tbody>
+    {% for flag in flags %}
+      {% set current = customer[flag] %}
+      <tr>
+        <td class="mono">{{ flag }}</td>
+        <td><span class="pill{% if current %} on{% endif %}">{{ "on" if current else "off" }}</span></td>
+        <td>
+          <form method="post" action="/customers/{{ customer.id }}/flags" class="inline">
+            <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+            <input type="hidden" name="flag" value="{{ flag }}">
+            <input type="hidden" name="value" value="{{ 'false' if current else 'true' }}">
+            <label class="check"><input type="checkbox" name="confirm" value="yes" required> confirm</label>
+            <button type="submit" class="secondary">Turn {{ "off" if current else "on" }}</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Letter of authority</h2>
+  {% if customer.loa_signed_at %}
+  <p>Signed {{ customer.loa_signed_at.date().isoformat() }} · <a href="/files/loa/{{ customer.id }}">download</a></p>
+  {% else %}<p class="muted">No LOA yet: real notices stay blocked (no_loa).</p>{% endif %}
+  <form method="post" action="/customers/{{ customer.id }}/loa" enctype="multipart/form-data" class="inline">
+    <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+    <label>File (PDF, PNG, JPEG) <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg" required></label>
+    <label>Signed on <input type="date" name="signed_on" max="{{ now.date().isoformat() }}" required></label>
+    <label class="check"><input type="checkbox" name="confirm" value="yes" required> confirm</label>
+    <button type="submit">Record LOA</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Monthly reports</h2>
+  {% if reports %}
+  <table>
+    <thead><tr><th>Month</th><th>State</th><th>PDF</th><th>CSV</th></tr></thead>
+    <tbody>
+    {% for report in reports %}
+      <tr>
+        <td class="mono">{{ report.period }}</td>
+        <td>{% if report.generated_at %}ready {{ report.generated_at|when }}{% elif report.print_token_hash %}printing{% else %}<span class="muted">not printed</span>{% endif %}</td>
+        <td>{{ "yes" if report.pdf_key else "—" }}</td>
+        <td>{{ "yes" if report.csv_key else "—" }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No reports yet. They are made on the 1st of each month for the month before.</p>{% endif %}
+  <form method="post" action="/customers/{{ customer.id }}/reports" class="inline">
+    <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+    <label>Month <input name="period" value="{{ report_period }}" required pattern="\d{4}-(0[1-9]|1[0-2])" maxlength="7" class="mono"></label>
+    <label class="check"><input type="checkbox" name="confirm" value="yes" required> confirm</label>
+    <button type="submit">Make report</button>
+  </form>
+  <p class="muted">worker-browser prints the PDF; the customer's owners get an e-mail when it is ready.</p>
+</section>
+
+<section class="card">
+  <h2>Brands</h2>
+  {% for brand in brands %}
+  <article class="brand">
+    <h3>{{ brand.name }}{% if not brand.active %} <span class="pill">inactive</span>{% endif %}</h3>
+    <dl class="facts">
+      <dt>Keywords</dt><dd class="mono">{{ brand.keywords|join(", ") or "—" }}</dd>
+      <dt>Variants</dt><dd>{{ brand.variants|join(", ") or "—" }}</dd>
+      <dt>Markets</dt><dd>{{ brand.target_markets|join(", ") or "—" }}</dd>
+      <dt>Languages</dt><dd>{{ brand.languages|join(", ") or "—" }}</dd>
+      <dt>Official domains</dt>
+      <dd>{% for official in domains.get(brand.id, []) %}<span class="mono">{{ official.domain }}</span> <span class="muted">({{ official.kind.value }})</span>{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}</dd>
+    </dl>
+    <form method="post" action="/brands/{{ brand.id }}/domains" class="inline">
+      <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+      <label>Official domain <input name="domain" placeholder="mintera.com" required></label>
+      <select name="kind" aria-label="Kind">{% for kind in domain_kinds %}<option value="{{ kind.value }}">{{ kind.value }}</option>{% endfor %}</select>
+      <button type="submit" class="secondary">Add domain</button>
+    </form>
+    <h4>Assets</h4>
+    <ul class="assets">
+      {% for asset in assets.get(brand.id, []) %}
+      <li>
+        <img src="/files/assets/{{ asset.id }}" alt="{{ asset.kind.value }}" class="thumb" loading="lazy">
+        <span>{{ asset.kind.value }}</span>
+        <span class="muted">{{ (asset.captured_at or asset.created_at)|when }}{% if not asset.phash %} · no hash yet{% endif %}</span>
+      </li>
+      {% else %}<li class="muted">No assets yet.</li>{% endfor %}
+    </ul>
+    <form method="post" action="/brands/{{ brand.id }}/assets" enctype="multipart/form-data" class="inline">
+      <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+      <select name="kind" aria-label="Asset kind">{% for kind in asset_kinds %}<option value="{{ kind.value }}">{{ kind.value }}</option>{% endfor %}</select>
+      <input type="file" name="file" accept=".png,.jpg,.jpeg,.gif,.webp,.ico,.svg" required aria-label="File">
+      <button type="submit" class="secondary">Upload</button>
+    </form>
+    <form method="post" action="/brands/{{ brand.id }}/references" class="inline">
+      <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+      <button type="submit" class="secondary">Refresh reference screenshots</button>
+    </form>
+  </article>
+  {% else %}<p class="muted">No brands yet.</p>{% endfor %}
+
+  <h3>Add a brand</h3>
+  <form method="post" action="/customers/{{ customer.id }}/brands" class="grid">
+    <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+    <label>Name <input name="name" required></label>
+    <label>Keywords <input name="keywords" placeholder="from the name; comma separated, 4+ characters"></label>
+    <label>Variants <input name="variants" placeholder="mint era, mint-era"></label>
+    <label>Target markets <input name="markets" placeholder="PL, TR"></label>
+    <label>Languages <input name="languages" placeholder="pl, tr"></label>
+    <button type="submit">Add brand</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Whitelist import</h2>
+  <p class="muted">CSV with a header row: <span class="mono">pattern,kind,note</span>; kind is official, mirror, affiliate, partner, social or other. Nothing is imported while any row is invalid.</p>
+  <form method="post" action="/customers/{{ customer.id }}/whitelist/preview" enctype="multipart/form-data" class="stack" hx-post="/customers/{{ customer.id }}/whitelist/preview" hx-target="#whitelist-report" hx-swap="outerHTML" hx-encoding="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+    <label>Scope
+      <select name="brand"><option value="">All brands</option>{% for brand in brands %}<option value="{{ brand.id }}">{{ brand.name }}</option>{% endfor %}</select>
+    </label>
+    <label>CSV file <input type="file" name="file" accept=".csv,text/csv"></label>
+    <label>or paste <textarea name="csv_text" rows="4" placeholder="pattern,kind,note&#10;mintera-partner.com,affiliate,"></textarea></label>
+    <button type="submit">Preview</button>
+  </form>
+  <div id="whitelist-report"></div>
+</section>
+
+<section class="card">
+  <h2>Users and invitations</h2>
+  <table>
+    <thead><tr><th>E-mail</th><th>Role</th><th>Invited by</th><th>Expires</th><th>Accepted</th></tr></thead>
+    <tbody>{% for invitation in invitations %}<tr><td>{{ invitation.email }}</td><td>{{ invitation.role.value }}</td><td>{{ invitation.invited_by or "—" }}</td><td>{{ invitation.expires_at|when }}</td><td>{{ invitation.accepted_at|when }}</td></tr>{% else %}<tr><td colspan="5" class="muted">No invitations.</td></tr>{% endfor %}</tbody>
+  </table>
+  <form method="post" action="/customers/{{ customer.id }}/invitations" class="inline">
+    <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+    <label>E-mail <input type="email" name="email" required></label>
+    <select name="role" aria-label="Role">{% for role in roles %}<option value="{{ role.value }}">{{ role.value }}</option>{% endfor %}</select>
+    <button type="submit">Create invitation link</button>
+  </form>
+</section>
+{% endblock %}

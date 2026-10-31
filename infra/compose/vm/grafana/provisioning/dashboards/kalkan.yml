@@ -1,0 +1,12 @@
+# Dashboards from files (architecture.md §23): vm/grafana/dashboards, read only in Grafana.
+apiVersion: 1
+
+providers:
+  - name: kalkan
+    folder: Kalkan
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false

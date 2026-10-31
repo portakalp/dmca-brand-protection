@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="htmx-config" content='{"includeIndicatorStyles": false, "allowEval": false, "allowScriptTags": false}'>
+  <title>{% block title %}Kalkan ops{% endblock %}</title>
+  <link rel="stylesheet" href="/static/ops.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/ops.js" defer></script>
+</head>
+<body{% if staff %} hx-headers='{"X-CSRF-Token": "{{ staff.csrf }}"}'{% endif %}>
+{% if staff %}
+<header class="top">
+  <span class="brand">Kalkan ops</span>
+  <nav>
+    {% for href, name in [("/review", "Review"), ("/cases", "Cases"), ("/outbox", "Outbox"), ("/tasks", "Tasks"), ("/replies", "Replies"), ("/labels", "Labelling"), ("/customers", "Customers"), ("/settings", "Settings"), ("/jobs", "Failed jobs"), ("/system", "System")] %}
+    <a href="{{ href }}"{% if path.startswith(href) %} class="active"{% endif %}>{{ name }}</a>
+    {% endfor %}
+  </nav>
+  <form method="post" action="/logout" class="logout">
+    <input type="hidden" name="csrf" value="{{ staff.csrf }}">
+    <span class="muted">{{ staff.email }}</span>
+    <button type="submit" class="link">Sign out</button>
+  </form>
+</header>
+{% endif %}
+<main>
+  {% if flash %}<p class="flash{% if flash.startswith('Error') %} error{% endif %}" role="status">{{ flash }}</p>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>
