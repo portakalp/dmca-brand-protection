@@ -352,7 +352,7 @@ services:
   # tunnel). Alert rules: vm/prometheus/rules; dashboards: vm/grafana/dashboards; Uptime Kuma's
   # monitors are added by hand.
   prometheus:
-    image: prom/prometheus:v3.13.4
+    image: prom/prometheus:v3.15.1
     restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml

@@ -499,7 +499,7 @@ services:
   # Optional (`make up-monitoring`): the VM's alert rules on the local stack; alarm e-mails go to
   # Mailpit (architecture.md §23, §25). Prometheus http://localhost:9090, Alertmanager :9093.
   prometheus:
-    image: prom/prometheus:v3.13.4
+    image: prom/prometheus:v3.15.1
     profiles: ["monitoring"]
     restart: unless-stopped
     command:
