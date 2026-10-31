@@ -260,7 +260,7 @@ services:
 
   # The only public service (Caddyfile): automatic HTTPS for APP_DOMAIN and EVIDENCE_DOMAIN.
   caddy:
-    image: caddy:2.10.2-alpine
+    image: caddy:2.11.6-alpine
     restart: unless-stopped
     logging: *logging
     environment:
