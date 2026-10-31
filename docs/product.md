@@ -99,7 +99,7 @@ flowchart LR
 ```
 
 1. Discovery finds a new domain (CT, CZDS or a permutation scan).
-2. The domain matches a brand. If it is whitelisted it is dropped silently; otherwise a case is opened (Reviewing in the panel).
+2. The domain matches a brand. If it is whitelisted it is dropped silently; otherwise a case is opened (In review in the panel).
 3. DNS, RDAP and hosting details are collected and an HTTP pre-check runs.
 4. A parked or empty site goes to Watching and is rescanned every 7 days.
 5. A suspicious site gets mobile and desktop evidence from the target market, and the similarity signals are computed.
@@ -155,7 +155,7 @@ The interface is in English. The default theme is light; users can choose dark o
 - Live-threats banner: how many threats are still live ("8 threats are still live"), with a link to them
 - Four KPI cards, each with the change against the previous period: Detected, Verified threats, Taken down (with the share of verified), Median takedown time
 - Daily detections and takedowns as an area chart (7, 30, 90 days)
-- Status breakdown: Reviewing, Active, Notice sent, Taken down, Watching, Dismissed (the Reviewing row shows only when its count is above zero)
+- Status breakdown: In review, Active, Notice sent, Taken down, Watching, Dismissed (the In review row shows only when its count is above zero)
 - Recent threats, newest first: domain and type, status, first seen, hosting, last action
 - Takedowns by channel: count and median time
 - Whitelist summary: total entries, added this month, latest additions
@@ -275,14 +275,14 @@ Status mapping (panel ← system):
 
 | Panel | System states |
 | --- | --- |
-| Reviewing | detected, in_review |
+| In review | detected, in_review |
 | Active | verified, approved |
 | Notice sent | notified |
 | Taken down | taken_down, archived |
 | Watching | watching |
 | Dismissed | dismissed |
 
-Status colors are the same everywhere: Active red, Notice sent amber, Taken down green, Watching grey, Dismissed light grey, Reviewing purple.
+Status colors are the same everywhere: Active red, Notice sent amber, Taken down green, Watching and In review grey, Dismissed light grey. A status always shows its icon and its word, never color alone.
 
 ## 13. Success criteria
 

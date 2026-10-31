@@ -28,7 +28,7 @@ test("the threat detail matches the design and switches captures", async ({ page
   await expect(
     page.getByRole("list", { name: "Matched signals" }).getByRole("listitem"),
   ).toHaveText(["Logo match", "Same page layout", "Identical favicon", "Brand name in domain"]);
-  await expect(page.getByText("0.97 confidence", { exact: true })).toBeVisible();
+  await expect(page.getByText("97% confidence", { exact: true })).toBeVisible();
   const timeline = page.getByRole("region", { name: "Timeline" });
   for (const step of [
     "Detected",

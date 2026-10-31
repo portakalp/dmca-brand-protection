@@ -2,233 +2,155 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Design tokens (architecture.md §18). The light values come from the approved panel design;
- * the dark theme redefines the same names. The accent is one variable: --accent-brand.
+ * Design tokens (architecture.md §18), direction "Plain sight". Light values on :root, the
+ * designed dark theme on .dark (next-themes sets html.dark). Neutrals lean cool slate; the accent
+ * is harbour navy and only marks actions, links, selection and focus. Status inks are reserved
+ * for statuses and always ship with an icon and a word. Blue (--takedown) means takedowns in
+ * every chart; gray (--context) means detections. No shadows on panels, no fills under lines.
  */
 :root {
-  --accent-brand: #2250f4;
-  --accent-brand-soft: rgb(34 80 244 / 12%);
-  --accent-brand-fill: rgb(34 80 244 / 10%);
-  --link: #1d44d8;
-  --link-hover: #1535ad;
+  color-scheme: light;
 
-  --canvas: #f4f5f7;
-  --panel: #ffffff;
-  --panel-border: #e6e8ec;
-  --card-border: #eaecf0;
-  --control-border: #e4e7ec;
-  --row-divider: #f2f4f7;
-  --table-head: #f9fafb;
-  --grid-line: #eaecf0;
-  --axis-line: #d0d5dd;
-  --text: #101828;
-  --text-strong: #344054;
-  --text-secondary: #475467;
-  --text-tertiary: #667085;
-  --segment: #f2f4f7;
-  --nav-active: #e8ebf0;
-  --brand-chip-bg: #1b1240;
-  --brand-chip-fg: #f5b83d;
+  /* Neutrals */
+  --bg: #f2f4f7;
+  --surface: #ffffff;
+  --sunken: #f6f7f9;
+  --border: #dde2e8;
+  --border-strong: #c3ccd6;
+  --text: #16202c;
+  --text-2: #475365;
+  --text-3: #5c6878;
 
-  --shadow-xs: 0 1px 2px rgb(16 24 40 / 5%);
-  --shadow-panel: 0 1px 3px rgb(16 24 40 / 4%);
-  --shadow-segment: 0 1px 2px rgb(16 24 40 / 10%);
-  --shadow-popover: 0 8px 24px rgb(16 24 40 / 10%);
-  --radius-control: 10px;
-  --radius-card: 14px;
-  --radius-panel: 16px;
+  /* Accent: actions, links, the selected nav item and segment, focus */
+  --accent: #1d4b7d;
+  --accent-hover: #163a62;
+  --accent-soft: #e7edf4;
+  --on-accent: #ffffff;
+  --focus: #1d4b7d;
 
-  --chart-detected: var(--accent-brand);
-  --chart-taken-down: #079455;
+  /* Status (reserved; icon + word, the word stays in --text) */
+  --st-critical: #c42d2d;
+  --st-warning: #a36500;
+  --st-good: #1a7f37;
+  --st-neutral: #66717f;
+  --st-neutral-2: #9aa4b0;
+  /* Text on a filled critical (destructive) button */
+  --on-critical: #ffffff;
 
-  /* Status colours (product.md §12): dot, badge text, badge background, badge border. */
-  --status-reviewing: #7a5af8;
-  --status-reviewing-fg: #5925dc;
-  --status-reviewing-bg: #f4f3ff;
-  --status-reviewing-border: #d9d6fe;
-  --status-active: #d92d20;
-  --status-active-dot: #f04438;
-  --status-active-fg: #b42318;
-  --status-active-bg: #fef3f2;
-  --status-active-border: #fecdca;
-  --status-notice: #f79009;
-  --status-notice-fg: #b54708;
-  --status-notice-bg: #fffaeb;
-  --status-notice-border: #fedf89;
-  --status-taken: #17b26a;
-  --status-taken-fg: #067647;
-  --status-taken-bg: #ecfdf3;
-  --status-taken-border: #abefc6;
-  --status-watching: #98a2b3;
-  --status-watching-fg: #344054;
-  --status-watching-bg: #f2f4f7;
-  --status-watching-border: #e4e7ec;
-  --status-dismissed: #d0d5dd;
-  --status-dismissed-fg: #475467;
-  --status-dismissed-bg: #f9fafb;
-  --status-dismissed-border: #eaecf0;
+  /* Charts: the emphasis form. Blue is never a status and never the accent. */
+  --takedown: #2a78d6;
+  --context: #b3bcc8;
+  --meter-neutral: #7c8796;
+  --grid: #e8ebef;
+  --axis: #c3ccd6;
+  --ref: #16202c;
+  --tooltip-bg: #16202c;
+  --tooltip-text: #f2f4f7;
+  --tooltip-muted: #b8c1cc;
 
-  --warning-fg: #7a2e0e;
-  --warning-icon: #b54708;
-  --warning-icon-bg: #fef0c7;
-  --warning-bg: #fffaeb;
-  --warning-border: #fedf89;
-  --success-fg: #067647;
-  --success-bg: #ecfdf3;
-  --danger-fg: #b42318;
-  --danger-bg: #fee4e2;
-  --danger: #d92d20;
+  /* Panels 6px (rounded-lg), controls 4px (rounded-sm / rounded-md). */
+  --radius: 6px;
 
   /* shadcn/ui variables, mapped onto the tokens above. */
-  --background: var(--panel);
+  --background: var(--surface);
   --foreground: var(--text);
-  --card: var(--panel);
+  --card: var(--surface);
   --card-foreground: var(--text);
-  --popover: var(--panel);
+  --popover: var(--surface);
   --popover-foreground: var(--text);
-  --primary: var(--accent-brand);
-  --primary-foreground: #ffffff;
-  /* Hover darkens, so white text keeps its contrast. */
-  --primary-hover: var(--link);
-  --secondary: var(--segment);
+  --primary: var(--accent);
+  --primary-foreground: var(--on-accent);
+  --primary-hover: var(--accent-hover);
+  --secondary: var(--sunken);
   --secondary-foreground: var(--text);
-  --muted: var(--segment);
-  --muted-foreground: var(--text-tertiary);
-  --accent: var(--segment);
-  --accent-foreground: var(--text);
-  --destructive: var(--danger);
-  --border: var(--card-border);
-  --input: var(--control-border);
-  --ring: var(--accent-brand);
-  --radius: 10px;
-  --sidebar: var(--canvas);
-  --sidebar-foreground: var(--text-strong);
-  --sidebar-primary: var(--accent-brand);
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: var(--nav-active);
+  --muted: var(--sunken);
+  --muted-foreground: var(--text-3);
+  --destructive: var(--st-critical);
+  --input: var(--border-strong);
+  --ring: var(--focus);
+  --sidebar: var(--bg);
+  --sidebar-foreground: var(--text-2);
+  --sidebar-primary: var(--accent);
+  --sidebar-primary-foreground: var(--on-accent);
+  --sidebar-accent: var(--sunken);
   --sidebar-accent-foreground: var(--text);
-  --sidebar-border: var(--panel-border);
-  --sidebar-ring: var(--accent-brand);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--focus);
 }
 
 .dark {
-  --accent-brand-soft: rgb(120 146 255 / 18%);
-  --accent-brand-fill: rgb(120 146 255 / 16%);
-  --link: #9db1ff;
-  --link-hover: #c3d0ff;
+  color-scheme: dark;
 
-  --canvas: #0b0f17;
-  --panel: #111723;
-  --panel-border: #222b3a;
-  --card-border: #263042;
-  --control-border: #2f3a4e;
-  --row-divider: #1d2533;
-  --table-head: #161d2a;
-  --grid-line: #263042;
-  --axis-line: #3a465c;
-  --text: #f2f4f7;
-  --text-strong: #d6dbe3;
-  --text-secondary: #c0c7d2;
-  --text-tertiary: #9aa4b5;
-  --segment: #1b2230;
-  --nav-active: #1f2838;
+  --bg: #0e1319;
+  --surface: #151b23;
+  --sunken: #11161d;
+  --border: #26303b;
+  --border-strong: #3a4656;
+  --text: #e6eaef;
+  --text-2: #aeb8c4;
+  --text-3: #8e9aa8;
 
-  --shadow-xs: 0 1px 2px rgb(0 0 0 / 30%);
-  --shadow-panel: 0 1px 3px rgb(0 0 0 / 30%);
-  --shadow-segment: 0 1px 2px rgb(0 0 0 / 40%);
-  --shadow-popover: 0 8px 24px rgb(0 0 0 / 45%);
+  --accent: #8fb6e8;
+  --accent-hover: #a9c7ef;
+  --accent-soft: #1a2736;
+  --on-accent: #0d1620;
+  --focus: #8fb6e8;
 
-  --chart-detected: #7892ff;
-  --chart-taken-down: #32d583;
+  --st-critical: #f06b6b;
+  --st-warning: #e0a21f;
+  --st-good: #46b85c;
+  --st-neutral: #8c97a5;
+  --st-neutral-2: #56616e;
+  --on-critical: #1a0b0b;
 
-  --status-reviewing: #9b8afb;
-  --status-reviewing-fg: #c3b5fd;
-  --status-reviewing-bg: rgb(122 90 248 / 16%);
-  --status-reviewing-border: rgb(155 138 251 / 35%);
-  --status-active: #f97066;
-  --status-active-dot: #f97066;
-  --status-active-fg: #fda29b;
-  --status-active-bg: rgb(240 68 56 / 14%);
-  --status-active-border: rgb(249 112 102 / 35%);
-  --status-notice: #fdb022;
-  --status-notice-fg: #fec84b;
-  --status-notice-bg: rgb(247 144 9 / 14%);
-  --status-notice-border: rgb(253 176 34 / 35%);
-  --status-taken: #47cd89;
-  --status-taken-fg: #75e0a7;
-  --status-taken-bg: rgb(23 178 106 / 14%);
-  --status-taken-border: rgb(71 205 137 / 35%);
-  --status-watching: #98a2b3;
-  --status-watching-fg: #d0d5dd;
-  --status-watching-bg: rgb(152 162 179 / 14%);
-  --status-watching-border: rgb(152 162 179 / 30%);
-  --status-dismissed: #667085;
-  --status-dismissed-fg: #b5bdc9;
-  --status-dismissed-bg: rgb(102 112 133 / 14%);
-  --status-dismissed-border: rgb(102 112 133 / 30%);
-
-  --warning-fg: #fedf89;
-  --warning-icon: #fdb022;
-  --warning-icon-bg: rgb(247 144 9 / 20%);
-  --warning-bg: rgb(247 144 9 / 10%);
-  --warning-border: rgb(253 176 34 / 35%);
-  --success-fg: #75e0a7;
-  --success-bg: rgb(23 178 106 / 16%);
-  --danger-fg: #fda29b;
-  --danger-bg: rgb(240 68 56 / 18%);
-  --danger: #f97066;
-
-  /* White on it stays above 4.5:1. */
-  --primary: #3d5ef5;
-  --primary-hover: #2f4fe0;
+  --takedown: #3987e5;
+  --context: #44505f;
+  --meter-neutral: #6b7686;
+  --grid: #212a34;
+  --axis: #3a4656;
+  --ref: #e6eaef;
+  --tooltip-bg: #e6eaef;
+  --tooltip-text: #16202c;
+  --tooltip-muted: #475365;
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-red-hat-text), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-red-hat-display), var(--font-red-hat-text), ui-sans-serif, sans-serif;
+  --font-mono: var(--font-red-hat-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-heading: var(--font-display);
 
-  --color-canvas: var(--canvas);
-  --color-panel: var(--panel);
-  --color-panel-border: var(--panel-border);
-  --color-card-border: var(--card-border);
-  --color-control-border: var(--control-border);
-  --color-row-divider: var(--row-divider);
-  --color-axis-line: var(--axis-line);
-  --color-table-head: var(--table-head);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-text: var(--text);
-  --color-text-strong: var(--text-strong);
-  --color-text-secondary: var(--text-secondary);
-  --color-text-tertiary: var(--text-tertiary);
-  --color-segment: var(--segment);
-  --color-nav-active: var(--nav-active);
-  --color-brand: var(--accent-brand);
-  --color-brand-soft: var(--accent-brand-soft);
-  --color-link: var(--link);
-  --color-link-hover: var(--link-hover);
-  --color-chart-detected: var(--chart-detected);
-  --color-chart-taken-down: var(--chart-taken-down);
-  --color-warning-fg: var(--warning-fg);
-  --color-warning-icon: var(--warning-icon);
-  --color-warning-icon-bg: var(--warning-icon-bg);
-  --color-warning-bg: var(--warning-bg);
-  --color-warning-border: var(--warning-border);
-  --color-success-fg: var(--success-fg);
-  --color-success-bg: var(--success-bg);
-  --color-danger-fg: var(--danger-fg);
-  --color-danger-bg: var(--danger-bg);
-  --color-danger: var(--danger);
-
-  --shadow-xs: var(--shadow-xs);
-  --shadow-panel: var(--shadow-panel);
-  --shadow-segment: var(--shadow-segment);
-  --shadow-popover: var(--shadow-popover);
-  --radius-control: var(--radius-control);
-  --radius-card: var(--radius-card);
-  --radius-panel: var(--radius-panel);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-focus: var(--focus);
+  --color-st-critical: var(--st-critical);
+  --color-st-warning: var(--st-warning);
+  --color-st-good: var(--st-good);
+  --color-st-neutral: var(--st-neutral);
+  --color-st-neutral-2: var(--st-neutral-2);
+  --color-on-critical: var(--on-critical);
+  --color-takedown: var(--takedown);
+  --color-context: var(--context);
+  --color-meter-neutral: var(--meter-neutral);
+  --color-grid: var(--grid);
+  --color-axis: var(--axis);
+  --color-ref: var(--ref);
+  --color-tooltip-bg: var(--tooltip-bg);
+  --color-tooltip-text: var(--tooltip-text);
+  --color-tooltip-muted: var(--tooltip-muted);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -243,10 +165,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
-  --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
@@ -257,38 +176,88 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
+
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 6px;
+  --radius-2xl: 8px;
+
+  --shadow-popover: 0 6px 16px rgb(10 16 24 / 12%);
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   html {
     @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+    /*
+     * Red Hat Text's hinted advances round word spaces away at 10-13px in Chromium on Linux
+     * (the PDF printer included); unhinted, subpixel advances keep them.
+     */
+    text-rendering: geometricPrecision;
   }
   body {
-    @apply bg-canvas text-text antialiased;
+    @apply bg-bg text-text antialiased;
     font-size: 14px;
-    line-height: 1.45;
+    line-height: 1.5;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.005em;
+  }
+  h1 {
+    font-size: 28px;
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  h2 {
+    font-size: 18px;
+    line-height: 1.3;
+    font-weight: 650;
+  }
+  h3 {
+    font-size: 14px;
+    line-height: 1.35;
+    font-weight: 600;
+  }
+  code,
+  kbd,
+  samp,
+  .font-mono {
+    font-variant-ligatures: none;
   }
   a {
-    color: var(--link);
+    color: var(--accent);
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
   }
   a:hover {
-    color: var(--link-hover);
+    color: var(--accent-hover);
   }
   :focus-visible {
-    outline: 2px solid var(--accent-brand);
+    outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
@@ -306,6 +275,6 @@
 
 html:has(.report-document),
 html:has(.report-document) body {
-  background: var(--panel);
+  background: var(--surface);
   print-color-adjust: exact;
 }

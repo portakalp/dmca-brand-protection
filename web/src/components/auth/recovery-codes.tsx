@@ -42,21 +42,21 @@ export function RecoveryCodes({
       </AuthHeading>
       <ul
         aria-label="Recovery codes"
-        className="mb-4 grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-control border border-card-border bg-table-head p-4 font-mono text-[13px]"
+        className="tabular mb-4 grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-sm border border-border bg-sunken px-4 py-3.5 font-mono text-[13.5px] text-text"
       >
         {codes.map((code) => (
           <li key={code}>{code}</li>
         ))}
       </ul>
       <div className="mb-5 flex gap-2">
-        <Button type="button" variant="control" size="control" className="flex-1" onClick={copy}>
+        <Button type="button" variant="outline" className="flex-1" onClick={copy}>
           {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
           {copied ? "Copied" : "Copy"}
         </Button>
         <Button
           type="button"
-          variant="control"
-          size="control"
+          variant="outline"
+
           className="flex-1"
           onClick={download}
         >
@@ -64,12 +64,12 @@ export function RecoveryCodes({
           Download
         </Button>
       </div>
-      <label className="mb-4 flex items-start gap-2 text-[13px] text-text-secondary">
+      <label className="mb-4 flex cursor-pointer items-start gap-2.5 text-[13.5px] text-text">
         <input
           type="checkbox"
           checked={saved}
           onChange={(event) => setSaved(event.target.checked)}
-          className="mt-0.5 size-4 accent-[var(--accent-brand)]"
+          className="mt-0.5 size-4 accent-[var(--accent)]"
         />
         I saved these codes somewhere safe.
       </label>

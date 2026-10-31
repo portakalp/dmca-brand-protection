@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Monthly report" };
  */
 export default function PrintReportPage({ params }: PageProps<"/print/report/[id]">) {
   return (
-    <main className="bg-panel py-2">
+    <main className="bg-surface py-2">
       <Suspense fallback={null}>
         <Report params={params} />
       </Suspense>
@@ -29,7 +29,7 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
   const token = (await headers()).get(REPORT_TOKEN_HEADER);
   const data = token ? await fetchReportData(id, token).catch(() => null) : null;
   if (data === null) {
-    return <p className="p-8 text-[14px] text-text-secondary">This report is not available.</p>;
+    return <p className="p-8 text-[14px] text-text-2">This report is not available.</p>;
   }
   return <ReportDocument data={data} />;
 }

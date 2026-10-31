@@ -5,7 +5,7 @@ import { useEffect, useId, useState } from "react";
 
 import { PageHeader } from "@/components/shell/page-header";
 import { usePanel } from "@/components/shell/panel";
-import { Card, EmptyState, ErrorState } from "@/components/states";
+import { Card, EmptyState, ErrorState, LoadingState, PanelHeader } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,10 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { threatsParams, useThreats } from "@/lib/api/queries";
-import { CATEGORY_LABELS } from "@/lib/format";
-import { parseRange, rangeDays, rangeLabel } from "@/lib/period";
+import { CATEGORY_LABELS, count, plural } from "@/lib/format";
+import { PRESET_DAYS, parseRange, rangeDays, shortDay, zoneName, type Range } from "@/lib/period";
 import { STATUSES, STATUS_LABELS } from "@/lib/status";
 import {
   DEFAULT_SORT,
@@ -36,6 +35,13 @@ import { ThreatTable } from "./threat-table";
 const FALLBACK = "all" as const;
 const ANY = "any";
 
+/** The lede's period: "in the last 30 days", "between Oct 2 and Oct 31", "since we started watching". */
+function periodPhrase(range: Range): string {
+  if (range.key === "all") return "since we started watching";
+  if (range.key === "custom") return `between ${shortDay(range.from!)} and ${shortDay(range.to!)}`;
+  return `in the last ${PRESET_DAYS[range.key]} days`;
+}
+
 function FilterSelect({
   label,
   value,
@@ -51,16 +57,12 @@ function FilterSelect({
 }) {
   const id = useId();
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-[0_1_180px] flex-col max-sm:flex-[1_1_140px]">
       <Label htmlFor={id} className="sr-only">
         {label}
       </Label>
       <Select value={value ?? ANY} onValueChange={(next) => onChange(next === ANY ? null : next)}>
-        <SelectTrigger
-          id={id}
-          aria-label={label}
-          className="min-h-10 min-w-40 rounded-control border-control-border bg-panel text-[13.5px] shadow-xs"
-        >
+        <SelectTrigger id={id} aria-label={label} className="w-full">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -94,7 +96,8 @@ function SearchBox({ value, onChange }: { value: string; onChange: (q: string) =
     <div className="relative min-w-0 flex-[1_1_240px]">
       <Search
         aria-hidden="true"
-        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-text-tertiary"
+        strokeWidth={1.5}
+        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-text-3"
       />
       <Input
         type="search"
@@ -103,7 +106,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (q: string) =
         value={text}
         maxLength={200}
         onChange={(event) => setText(event.target.value)}
-        className="min-h-10 rounded-control border-control-border bg-panel pl-9 text-[13.5px] shadow-xs"
+        className="pl-9"
       />
     </div>
   );
@@ -136,13 +139,31 @@ export function ThreatsView() {
     <>
       <PageHeader
         title="Threats"
-        subtitle={data ? `${data.total} threats · ${rangeLabel(range)}` : rangeLabel(range)}
+        subtitle={
+          data
+            ? `${count(data.total)} lookalike ${plural(data.total, "domain", "domains")} found ${periodPhrase(range)}. Times are in ${zoneName(timeZone)}.`
+            : `Every lookalike domain we found. Times are in ${zoneName(timeZone)}.`
+        }
         range={{ value: range, fallback: FALLBACK }}
       />
-      <Card aria-label="Threats" className="flex flex-col overflow-hidden">
+      <Card aria-labelledby="threats-title" className="flex flex-col overflow-hidden">
+        <PanelHeader
+          id="threats-title"
+          title="All threats"
+          description="Newest first. Open a row to see its evidence and takedown progress."
+          actions={
+            <Button asChild variant="outline">
+              <a href={csv} download>
+                <Download aria-hidden="true" />
+                Download CSV
+              </a>
+            </Button>
+          }
+        />
         <div
           role="search"
-          className="flex flex-wrap items-center gap-2 border-b border-card-border px-5 py-4"
+          aria-label="Filter threats"
+          className="flex flex-wrap items-center gap-2 px-5 pt-4 pb-4 max-sm:px-4"
         >
           <SearchBox value={filters.q ?? ""} onChange={(q) => update({ q, page: null })} />
           <FilterSelect
@@ -162,46 +183,35 @@ export function ThreatsView() {
           {hasFilters(filters) ? (
             <Button
               variant="ghost"
-              size="control"
               onClick={() => update({ q: null, status: null, category: null, page: null })}
             >
               <X aria-hidden="true" />
               Clear filters
             </Button>
           ) : null}
-          <Button asChild variant="control" size="control" className="ml-auto">
-            <a
-              href={csv}
-              download
-              className="text-text no-underline hover:text-text hover:no-underline"
-            >
-              <Download aria-hidden="true" className="text-text-secondary" />
-              Download CSV
-            </a>
-          </Button>
         </div>
         {threats.isPending ? (
-          <div aria-busy="true" aria-label="Loading threats" className="flex flex-col gap-2 p-5">
-            {Array.from({ length: 8 }, (_, index) => (
-              <Skeleton key={index} className="h-11" />
-            ))}
-          </div>
+          <LoadingState rows={8} label="Loading threats" className="border-t border-border" />
         ) : threats.isError && !data ? (
-          <ErrorState error={threats.error} onRetry={() => threats.refetch()} />
+          <ErrorState
+            error={threats.error}
+            onRetry={() => threats.refetch()}
+            className="border-t border-border"
+          />
         ) : data && data.items.length === 0 ? (
           hasFilters(filters) || range.key !== FALLBACK ? (
-            <EmptyState title="No threats match these filters">
-              Try another status, type or date range.
+            <EmptyState title="No threats match these filters" className="border-t border-border">
+              Try another status, type or period.
             </EmptyState>
           ) : (
-            <EmptyState title="No threats yet">
+            <EmptyState title="No threats yet" className="border-t border-border">
               We&apos;re watching new domains around the clock. Lookalikes of your brand show up
               here as soon as we find them.
             </EmptyState>
           )
         ) : data ? (
           <div
-            className="transition-opacity aria-busy:opacity-60"
+            className="transition-opacity aria-busy:opacity-60 motion-reduce:transition-none"
             aria-busy={threats.isPlaceholderData || undefined}
           >
             <ThreatTable
@@ -212,7 +222,7 @@ export function ThreatsView() {
             />
             <nav
               aria-label="Pagination"
-              className="flex flex-wrap items-center justify-between gap-3 border-t border-card-border px-5 py-3 text-[13px] text-text-secondary"
+              className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-[13px] text-text-2 max-sm:px-4"
             >
               <span className="tabular" role="status">
                 {showing(data.page, data.total)}
@@ -222,16 +232,16 @@ export function ThreatsView() {
                   Page {data.page} of {pages}
                 </span>
                 <Button
-                  variant="control"
-                  size="control"
+                  variant="outline"
+                  size="sm"
                   disabled={data.page <= 1}
                   onClick={() => update({ page: data.page - 1 > 1 ? String(data.page - 1) : null })}
                 >
                   Previous
                 </Button>
                 <Button
-                  variant="control"
-                  size="control"
+                  variant="outline"
+                  size="sm"
                   disabled={data.page >= pages}
                   onClick={() => update({ page: String(data.page + 1) })}
                 >

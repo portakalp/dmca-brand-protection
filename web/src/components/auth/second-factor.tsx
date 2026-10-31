@@ -88,7 +88,7 @@ function Verify({ onDone, onSetup }: { onDone: () => void; onSetup: () => void }
         <Button
           type="button"
           variant="link"
-          className="h-auto self-center p-0 text-[13px] text-link"
+          className="h-auto self-center p-0 text-[13px] text-accent"
           onClick={() => {
             setRecovery(!recovery);
             setCode("");
@@ -162,11 +162,11 @@ function Setup({ onCodes }: { onCodes: (codes: string[]) => void }) {
             <div
               role="img"
               aria-label="QR code for your authenticator app"
-              className="rounded-control border border-card-border bg-white p-2 [&_svg]:size-44"
+              className="rounded-sm border border-border bg-white p-2 [&_svg]:size-44"
               dangerouslySetInnerHTML={{ __html: qr }}
             />
           ) : null}
-          <p className="text-center text-[12.5px] text-text-secondary">
+          <p className="text-center text-[12.5px] text-text-2">
             Can&apos;t scan it? Enter this key:
             <code className="mt-1 block font-mono text-[13px] font-medium break-all text-text">
               {grouped(setup.secret)}

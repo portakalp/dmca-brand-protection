@@ -3,16 +3,16 @@
 import Link from "next/link";
 
 import { PageHeader } from "@/components/shell/page-header";
-import { brandLabel, usePanel } from "@/components/shell/panel";
-import { Card, CardTitle, EmptyState, ErrorState } from "@/components/states";
-import { ThreatTable } from "@/components/threats/threat-table";
+import { usePanel } from "@/components/shell/panel";
+import { Card, EmptyState, ErrorState, PanelHeader } from "@/components/states";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOverview } from "@/lib/api/queries";
-import { daysBetween, parseRange, periodLabel, rangeDays, rangeParams } from "@/lib/period";
+import { daysBetween, parseRange, periodLabel, rangeDays, zoneName } from "@/lib/period";
 import { sharedQuery, useUrlState } from "@/lib/url";
 
 import { KpiCards } from "./kpi-cards";
 import { LiveBanner } from "./live-banner";
+import { RecentThreats } from "./recent-threats";
 import { ChannelsCard, WhitelistCard } from "./side-cards";
 import { StatusCard } from "./status-card";
 import { TrendChart } from "./trend-chart";
@@ -20,23 +20,22 @@ import { TrendChart } from "./trend-chart";
 const FALLBACK = "30d" as const;
 /** The design shows six recent threats; the API sends a few more. */
 const RECENT_ROWS = 6;
+/** Two panels side by side: the wide one (chart, channels) and the narrow one. */
+const ROW =
+  "grid grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)] items-stretch gap-5 max-[1180px]:grid-cols-1";
 
 function OverviewSkeleton() {
   return (
-    <div aria-busy="true" aria-label="Loading overview" className="flex flex-col gap-5">
-      <Skeleton className="h-14 rounded-xl" />
-      <div className="flex flex-wrap gap-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <Skeleton key={index} className="h-[132px] flex-[1_1_210px] rounded-card" />
-        ))}
+    <div aria-busy="true" aria-label="Loading overview" className="flex flex-col gap-6">
+      <Skeleton className="h-[104px] rounded-lg" />
+      <Skeleton className="h-[240px] rounded-lg" />
+      <div className={ROW}>
+        <Skeleton className="h-[420px] rounded-lg" />
+        <Skeleton className="h-[420px] rounded-lg" />
       </div>
-      <div className="flex flex-wrap gap-4">
-        <Skeleton className="h-[388px] flex-[2_1_540px] rounded-card" />
-        <Skeleton className="h-[388px] flex-[1_1_280px] rounded-card" />
-      </div>
-      <div className="flex flex-wrap gap-4">
-        <Skeleton className="h-[420px] flex-[2_1_540px] rounded-card" />
-        <Skeleton className="h-[420px] flex-[1_1_280px] rounded-card" />
+      <div className={ROW}>
+        <Skeleton className="h-[360px] rounded-lg" />
+        <Skeleton className="h-[360px] rounded-lg" />
       </div>
     </div>
   );
@@ -44,7 +43,7 @@ function OverviewSkeleton() {
 
 export function OverviewView() {
   const { me, brand, timeZone } = usePanel();
-  const { params, update } = useUrlState();
+  const { params } = useUrlState();
   const range = parseRange(params, FALLBACK);
   const days = rangeDays(range, timeZone);
   const overview = useOverview({
@@ -53,9 +52,16 @@ export function OverviewView() {
     to: days?.to ?? null,
   });
   const data = overview.data;
-  const subtitle = data
-    ? `${brandLabel(me, brand)} · ${periodLabel(data.period.start, data.period.end)}`
-    : brandLabel(me, brand);
+  const only = me.brands.length === 1 ? me.brands[0] : null;
+  const domain = (brand ?? only)?.primary_domain;
+  const subtitle = (
+    <>
+      Lookalike domains found for{" "}
+      {domain ? <span className="font-mono text-[0.95em]">{domain}</span> : "all your brands"}
+      {data ? `, ${periodLabel(data.period.start, data.period.end)}` : ""}. Times are in{" "}
+      {zoneName(timeZone)}.
+    </>
+  );
 
   return (
     <>
@@ -73,57 +79,51 @@ export function OverviewView() {
         </Card>
       ) : data ? (
         <div
-          className="flex flex-col gap-5 transition-opacity aria-busy:opacity-60"
+          className="flex flex-col gap-6 transition-opacity aria-busy:opacity-60 motion-reduce:transition-none"
           aria-busy={overview.isPlaceholderData || undefined}
         >
           <LiveBanner live={data.live_threats} />
           <KpiCards
             kpis={data.kpis}
             changes={data.changes}
-            days={daysBetween(data.period.start, data.period.end)}
+            days={daysBetween(data.previous_period.start, data.previous_period.end)}
           />
-          <div className="flex flex-wrap items-stretch gap-4">
-            <TrendChart
-              daily={data.daily}
-              totals={{ detected: data.kpis.detected, taken_down: data.kpis.taken_down }}
-              period={data.period}
-              range={range.key}
-              onRange={(key) => update(rangeParams({ key, from: null, to: null }, FALLBACK))}
-            />
+          <div className={ROW}>
+            <TrendChart daily={data.daily} period={data.period} timeZone={timeZone} />
             <StatusCard distribution={data.status_distribution} detected={data.kpis.detected} />
           </div>
-          <div className="flex flex-wrap items-stretch gap-4">
-            <Card
-              id="recent"
-              aria-labelledby="recent-title"
-              className="flex flex-[2_1_540px] flex-col overflow-hidden"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-                <CardTitle id="recent-title" title="Recent threats" subtitle="Newest first" />
+          <div className={ROW}>
+            <ChannelsCard
+              channels={data.takedowns_by_channel}
+              overall={data.kpis.median_takedown_hours}
+            />
+            <WhitelistCard whitelist={data.whitelist} />
+          </div>
+          <Card id="recent" aria-labelledby="recent-title" className="overflow-hidden">
+            <PanelHeader
+              id="recent-title"
+              title="Recent threats"
+              description="Newest first. Open a row to see its evidence and takedown progress."
+              actions={
                 <Link
                   href={`/threats${sharedQuery(params)}`}
-                  className="inline-flex min-h-10 items-center text-[13.5px] font-medium"
+                  className="text-[13.5px] font-semibold text-accent underline underline-offset-[3px] hover:text-accent-hover"
                 >
                   View all threats
                 </Link>
-              </div>
+              }
+            />
+            <div className="mt-3.5">
               {data.recent_threats.length ? (
-                <ThreatTable
-                  threats={data.recent_threats.slice(0, RECENT_ROWS)}
-                  caption="Recent threats, newest first"
-                />
+                <RecentThreats threats={data.recent_threats.slice(0, RECENT_ROWS)} />
               ) : (
-                <EmptyState title="No threats yet" className="border-t border-card-border">
+                <EmptyState title="No threats yet" className="border-t border-border">
                   We&apos;re watching new domains around the clock. Lookalikes of your brand show up
                   here as soon as we find them.
                 </EmptyState>
               )}
-            </Card>
-            <div className="flex min-w-0 flex-[1_1_280px] flex-col gap-4">
-              <ChannelsCard channels={data.takedowns_by_channel} />
-              <WhitelistCard whitelist={data.whitelist} />
             </div>
-          </div>
+          </Card>
         </div>
       ) : null}
     </>

@@ -119,3 +119,30 @@ export function periodLabel(start: string, end: string): string {
   }
   return `${longDay(start)} – ${longDay(end)}`;
 }
+
+const WEEKDAY_DAY = new Intl.DateTimeFormat("en-US", {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+
+/** "Sat, Oct 17" for a YYYY-MM-DD day (the chart tooltip). */
+export function weekdayDay(day: string): string {
+  return WEEKDAY_DAY.format(new Date(`${day}T00:00:00Z`));
+}
+
+/** "Last 30 days" for a period of whole days ending today, else "Oct 2 – Oct 31". */
+export function periodName(start: string, end: string, timeZone: string, now = new Date()): string {
+  const days = daysBetween(start, end);
+  if (end === todayIn(timeZone, now)) return days === 1 ? "Today" : `Last ${days} days`;
+  return `${shortDay(start)} – ${shortDay(end)}`;
+}
+
+/** The short name of a time zone at a moment: "CET" for Warsaw in October, "GMT+3" for Istanbul. */
+export function zoneName(timeZone: string, at: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone, timeZoneName: "short" }).formatToParts(
+    at,
+  );
+  return parts.find((part) => part.type === "timeZoneName")?.value ?? timeZone;
+}

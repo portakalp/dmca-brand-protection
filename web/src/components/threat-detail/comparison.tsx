@@ -1,25 +1,26 @@
 "use client";
 
-import { Check, ImageOff, Lock, Monitor, Smartphone } from "lucide-react";
+import { Check, ImageOff, Lock } from "lucide-react";
 import { useState } from "react";
 
 import { usePanel } from "@/components/shell/panel";
-import { Card, CardTitle } from "@/components/states";
-import { Pill } from "@/components/pill";
+import { Card, PanelBody, PanelHeader } from "@/components/states";
+import { Meter } from "@/components/ui/meter";
+import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Schemas } from "@/lib/api/client";
-import { matchedSignals, ringDash, similarity } from "@/lib/evidence";
+import { matchedSignals, similarity } from "@/lib/evidence";
 import { dayTime } from "@/lib/threat-detail";
 import { cn } from "@/lib/utils";
 
 type Profile = Schemas["Profile"];
 
-const PROFILES: { value: Profile; label: string; icon: typeof Monitor }[] = [
-  { value: "desktop", label: "Desktop", icon: Monitor },
-  { value: "mobile", label: "Mobile", icon: Smartphone },
+const PROFILES: { value: Profile; label: string }[] = [
+  { value: "desktop", label: "Desktop" },
+  { value: "mobile", label: "Mobile" },
 ];
 
-/** A capture in a browser frame; a skeleton until the image arrives from the API. */
+/** A capture in a plain browser frame; a skeleton until the image arrives from the API. */
 function Shot({
   image,
   domain,
@@ -38,20 +39,18 @@ function Shot({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-[12px] border border-control-border bg-segment shadow-xs",
-        mobile && "mx-auto w-full max-w-[240px]",
+        "overflow-hidden rounded-sm border border-border-strong bg-sunken",
+        mobile && "mx-auto w-full max-w-[260px]",
       )}
     >
-      <div className="flex h-[34px] items-center border-b border-control-border bg-segment px-2">
-        <span className="flex h-[22px] min-w-0 flex-auto items-center gap-1.5 overflow-hidden rounded-[6px] bg-panel px-2 font-mono text-[11px] whitespace-nowrap text-text-secondary">
-          <Lock aria-hidden="true" className="size-[11px] flex-none" />
-          {domain}
-        </span>
+      <div className="flex items-center gap-1.5 border-b border-border bg-surface px-2.5 py-1.5 font-mono text-[11.5px] text-text-2">
+        <Lock aria-hidden="true" strokeWidth={1.5} className="size-3 flex-none" />
+        <span className="min-w-0 truncate">{domain}</span>
       </div>
-      <div className={cn("relative", mobile ? "aspect-[9/16]" : "aspect-[7/5]")}>
+      <div className={cn("relative", mobile ? "aspect-[9/16]" : "aspect-[16/10]")}>
         {url === null || failed === url ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[12.5px] text-text-tertiary">
-            <ImageOff aria-hidden="true" className="size-5" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[12.5px] text-text-3">
+            <ImageOff aria-hidden="true" strokeWidth={1.5} className="size-5" />
             {url === null ? "No capture yet" : "The capture could not be loaded"}
           </div>
         ) : (
@@ -69,7 +68,7 @@ function Shot({
               onLoad={() => setLoaded(url)}
               onError={() => setFailed(url)}
               className={cn(
-                "absolute inset-0 size-full object-cover object-top transition-opacity",
+                "absolute inset-0 size-full object-contain object-top",
                 loaded === url ? "opacity-100" : "opacity-0",
               )}
             />
@@ -80,33 +79,8 @@ function Shot({
   );
 }
 
-function Ring({ percent }: { percent: number | null }) {
-  return (
-    <div className="relative size-[132px]">
-      <svg width="132" height="132" viewBox="0 0 132 132" aria-hidden="true" className="block">
-        <circle cx="66" cy="66" r="54" fill="none" stroke="var(--card-border)" strokeWidth="10" />
-        {percent !== null ? (
-          <circle
-            cx="66"
-            cy="66"
-            r="54"
-            fill="none"
-            stroke="var(--accent-brand)"
-            strokeWidth="10"
-            strokeLinecap="round"
-            strokeDasharray={ringDash(percent)}
-            transform="rotate(-90 66 66)"
-          />
-        ) : null}
-      </svg>
-      <p className="absolute inset-0 m-0 flex flex-col items-center justify-center">
-        <span className="tabular text-[28px] leading-8 font-semibold tracking-[-0.02em]">
-          {percent !== null ? `${percent}%` : "—"}
-        </span>
-        <span className="text-xs leading-4 text-text-tertiary">similarity</span>
-      </p>
-    </div>
-  );
+function SmallHead({ children }: { children: string }) {
+  return <h3 className="mb-2 font-sans text-[12.5px] font-semibold text-text-2">{children}</h3>;
 }
 
 export function Comparison({ detail }: { detail: Schemas["ThreatDetail"] }) {
@@ -123,51 +97,26 @@ export function Comparison({ detail }: { detail: Schemas["ThreatDetail"] }) {
   const label = profile === "desktop" ? "Desktop" : "Mobile";
 
   return (
-    <Card aria-labelledby="compare-title" className="flex flex-col gap-[18px] px-5 pt-[18px] pb-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <CardTitle
-          id="compare-title"
-          title="Side-by-side comparison"
-          subtitle={
-            capture
-              ? `${label} capture · ${dayTime(capture.captured_at, timeZone)}`
-              : `No ${label.toLowerCase()} capture yet`
-          }
-        />
-        <div
-          role="group"
-          aria-label="Capture"
-          className="inline-flex gap-0.5 rounded-control bg-segment p-[3px]"
-        >
-          {PROFILES.map((item) => {
-            const Icon = item.icon;
-            const pressed = profile === item.value;
-            return (
-              <button
-                key={item.value}
-                type="button"
-                aria-pressed={pressed}
-                onClick={() => setProfile(item.value)}
-                className={cn(
-                  "inline-flex min-h-[34px] items-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium",
-                  pressed
-                    ? "bg-panel text-text shadow-segment"
-                    : "text-text-secondary hover:text-text",
-                )}
-              >
-                <Icon aria-hidden="true" className="size-[15px]" />
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-stretch gap-5">
-        <figure className="m-0 flex min-w-0 flex-[1_1_300px] flex-col gap-2.5">
-          <figcaption className="flex min-h-[22px] flex-wrap items-center gap-2 text-[13px]">
-            <Pill>Your site</Pill>
-            <span className="font-mono text-[12.5px] font-medium">{officialDomain}</span>
+    <Card aria-labelledby="compare-title">
+      <PanelHeader
+        id="compare-title"
+        title="Side-by-side comparison"
+        description={
+          capture
+            ? `${label} capture · ${dayTime(capture.captured_at, timeZone)}`
+            : `No ${label.toLowerCase()} capture yet`
+        }
+        actions={
+          <Segmented label="Capture" options={PROFILES} value={profile} onChange={setProfile} />
+        }
+      />
+      <PanelBody className="grid grid-cols-1 items-start gap-6 min-[561px]:grid-cols-2 min-[1181px]:grid-cols-[minmax(0,1fr)_230px_minmax(0,1fr)]">
+        <figure className="m-0 min-w-0">
+          <figcaption className="mb-2 flex min-w-0 items-center gap-2 text-[13px] text-text-2">
+            Your site
+            <span className="truncate font-mono text-text" title={officialDomain}>
+              {officialDomain}
+            </span>
           </figcaption>
           <Shot
             image={official}
@@ -177,31 +126,45 @@ export function Comparison({ detail }: { detail: Schemas["ThreatDetail"] }) {
           />
         </figure>
 
-        <div className="mx-auto flex min-w-0 flex-[0_1_200px] flex-col items-center justify-center gap-[18px] py-2">
-          <Ring percent={percent} />
-          {signals.length ? (
-            <ul aria-label="Matched signals" className="m-0 flex list-none flex-col gap-[9px] p-0">
-              {signals.map((signal) => (
-                <li key={signal} className="flex items-center gap-2 text-[13px] text-text-strong">
-                  <span
-                    aria-hidden="true"
-                    className="inline-flex size-[18px] flex-none items-center justify-center rounded-full bg-danger-bg text-danger-fg"
-                  >
-                    <Check className="size-[11px]" strokeWidth={3} />
-                  </span>
-                  {signal}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-center text-[13px] text-text-tertiary">No matched signals yet</p>
-          )}
+        {/* Between the shots on a wide screen; under both, side by side, on a narrower one. */}
+        <div className="flex min-w-0 flex-col gap-4 min-[561px]:max-[1180px]:col-span-2 min-[561px]:max-[1180px]:row-start-2 min-[561px]:max-[1180px]:grid min-[561px]:max-[1180px]:grid-cols-2 min-[561px]:max-[1180px]:gap-6 min-[1181px]:pt-7">
+          <div>
+            <SmallHead>Visual similarity</SmallHead>
+            <p className="font-display text-[40px] leading-none font-semibold">
+              {percent !== null ? `${percent}%` : "—"}
+            </p>
+            {percent !== null ? <Meter value={percent} tone="neutral" className="mt-2.5" /> : null}
+            <p className="mt-1.5 text-[12.5px] text-text-3">
+              How closely the two screenshots match.
+            </p>
+          </div>
+          <div>
+            <SmallHead>Matched signals</SmallHead>
+            {signals.length ? (
+              <ul aria-label="Matched signals" className="m-0 flex list-none flex-col gap-2 p-0">
+                {signals.map((signal) => (
+                  <li key={signal} className="flex items-center gap-2 text-[13.5px]">
+                    <Check
+                      aria-hidden="true"
+                      strokeWidth={1.5}
+                      className="size-4 flex-none text-text-3"
+                    />
+                    {signal}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[13px] text-text-3">No matched signals yet.</p>
+            )}
+          </div>
         </div>
 
-        <figure className="m-0 flex min-w-0 flex-[1_1_300px] flex-col gap-2.5">
-          <figcaption className="flex min-h-[22px] flex-wrap items-center gap-2 text-[13px]">
-            <Pill tone="danger">Clone</Pill>
-            <span className="font-mono text-[12.5px] font-medium">{detail.threat.domain}</span>
+        <figure className="m-0 min-w-0">
+          <figcaption className="mb-2 flex min-w-0 items-center gap-2 text-[13px] text-text-2">
+            Lookalike
+            <span className="truncate font-mono text-text" title={detail.threat.domain}>
+              {detail.threat.domain}
+            </span>
           </figcaption>
           <Shot
             image={clone}
@@ -210,7 +173,7 @@ export function Comparison({ detail }: { detail: Schemas["ThreatDetail"] }) {
             alt={`${label} capture of the clone, ${detail.threat.domain}`}
           />
         </figure>
-      </div>
+      </PanelBody>
     </Card>
   );
 }

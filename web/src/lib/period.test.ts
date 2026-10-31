@@ -5,10 +5,13 @@ import {
   daysBetween,
   parseRange,
   periodLabel,
+  periodName,
   rangeDays,
   rangeLabel,
   rangeParams,
   todayIn,
+  weekdayDay,
+  zoneName,
 } from "./period";
 
 const params = (query: string) => new URLSearchParams(query);
@@ -69,5 +72,15 @@ describe("ranges", () => {
     );
     expect(addDays("2026-03-01", -1)).toBe("2026-02-28");
     expect(daysBetween("2026-09-09", "2026-10-08")).toBe(30);
+  });
+
+  it("names the period, the tooltip day and the time zone", () => {
+    const now = new Date("2026-10-31T12:00:00Z");
+    expect(periodName("2026-10-02", "2026-10-31", "UTC", now)).toBe("Last 30 days");
+    expect(periodName("2026-10-31", "2026-10-31", "UTC", now)).toBe("Today");
+    expect(periodName("2026-09-01", "2026-09-10", "UTC", now)).toBe("Sep 1 – Sep 10");
+    expect(weekdayDay("2026-10-17")).toBe("Sat, Oct 17");
+    expect(zoneName("Europe/Warsaw", now)).toBe("CET");
+    expect(zoneName("UTC", now)).toBe("UTC");
   });
 });

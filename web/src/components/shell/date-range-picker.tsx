@@ -1,12 +1,13 @@
 "use client";
 
-import { CalendarDays, Check, ChevronDown } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { useId, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
 import {
   MAX_DAYS,
   PRESETS,
@@ -20,46 +21,26 @@ import {
   type RangeKey,
 } from "@/lib/period";
 import { useUrlState } from "@/lib/url";
-import { cn } from "@/lib/utils";
 
 import { usePanel } from "./panel";
 
-function Option({
-  selected,
-  onSelect,
-  children,
-}: {
-  selected: boolean;
-  onSelect: () => void;
-  children: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onSelect}
-      className="flex min-h-9 w-full items-center justify-between gap-3 rounded-md px-2.5 text-left text-[13.5px] hover:bg-segment"
-    >
-      {children}
-      {selected ? <Check aria-hidden="true" className="size-4 text-brand" /> : null}
-    </button>
-  );
-}
+type Choice = Exclude<RangeKey, "custom">;
 
-/** The period of the page: 7, 30 or 90 days, a custom range, and on Threats all time. */
-export function DateRangePicker({ range, fallback }: { range: Range; fallback: RangeKey }) {
+/** The custom range: a "Custom" button that opens two date fields. */
+function CustomRange({
+  range,
+  onApply,
+}: {
+  range: Range;
+  onApply: (from: string, to: string) => void;
+}) {
   const { timeZone } = usePanel();
-  const { update } = useUrlState();
   const [open, setOpen] = useState(false);
   const days = rangeDays(range, timeZone);
   const [from, setFrom] = useState(days?.from ?? "");
   const [to, setTo] = useState(days?.to ?? "");
   const id = useId();
-
-  const choose = (next: Range) => {
-    update({ ...rangeParams(next, fallback), page: null });
-    setOpen(false);
-  };
+  const selected = range.key === "custom";
   const customError =
     !isIsoDate(from) || !isIsoDate(to)
       ? "Pick both days."
@@ -81,43 +62,32 @@ export function DateRangePicker({ range, fallback }: { range: Range; fallback: R
       }}
     >
       <PopoverTrigger asChild>
-        <Button variant="control" size="control" aria-label={`Date range: ${rangeLabel(range)}`}>
-          <CalendarDays aria-hidden="true" className="text-text-secondary" />
-          {rangeLabel(range)}
-          <ChevronDown aria-hidden="true" className="text-text-tertiary" />
+        <Button
+          variant="outline"
+          size="sm"
+          aria-pressed={selected}
+          aria-label={selected ? `Custom range: ${rangeLabel(range)}` : "Custom range"}
+          className={selected ? "bg-accent-soft hover:bg-accent-soft" : undefined}
+        >
+          <CalendarDays aria-hidden="true" className="text-text-2" />
+          {selected ? rangeLabel(range) : "Custom"}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-72 p-1.5">
-        <div role="group" aria-label="Date range" className="flex flex-col">
-          {PRESETS.map((key) => (
-            <Option
-              key={key}
-              selected={range.key === key}
-              onSelect={() => choose({ key, from: null, to: null })}
-            >
-              {`Last ${PRESET_DAYS[key]} days`}
-            </Option>
-          ))}
-          {fallback === "all" ? (
-            <Option
-              selected={range.key === "all"}
-              onSelect={() => choose({ key: "all", from: null, to: null })}
-            >
-              All time
-            </Option>
-          ) : null}
-        </div>
+      <PopoverContent align="end" className="w-72 p-3">
         <form
-          className={cn("mt-1.5 flex flex-col gap-2 border-t border-row-divider p-2.5")}
+          className="flex flex-col gap-2.5"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!customError) choose({ key: "custom", from, to });
+            if (!customError) {
+              onApply(from, to);
+              setOpen(false);
+            }
           }}
         >
-          <p className="text-[12px] font-medium text-text-secondary">Custom range</p>
+          <p className="text-[13px] font-semibold">Custom range</p>
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
-              <Label htmlFor={`${id}-from`} className="text-[12px]">
+              <Label htmlFor={`${id}-from`} className="text-[12.5px] text-text-2">
                 From
               </Label>
               <Input
@@ -129,7 +99,7 @@ export function DateRangePicker({ range, fallback }: { range: Range; fallback: R
               />
             </div>
             <div className="flex flex-col gap-1">
-              <Label htmlFor={`${id}-to`} className="text-[12px]">
+              <Label htmlFor={`${id}-to`} className="text-[12.5px] text-text-2">
                 To
               </Label>
               <Input
@@ -142,11 +112,11 @@ export function DateRangePicker({ range, fallback }: { range: Range; fallback: R
             </div>
           </div>
           {customError && (from || to) ? (
-            <p className="text-[12px] text-danger-fg" role="status">
+            <p className="text-[12.5px] text-text-2" role="status">
               {customError}
             </p>
           ) : null}
-          <Button type="submit" size="lg" disabled={!!customError}>
+          <Button type="submit" disabled={!!customError}>
             Apply
           </Button>
         </form>
@@ -154,3 +124,35 @@ export function DateRangePicker({ range, fallback }: { range: Range; fallback: R
     </Popover>
   );
 }
+
+/**
+ * The page's one period control: a visible "Period" label, a group of 7 / 30 / 90 days (and
+ * "All time" where the page defaults to it), and a custom range. It writes the range to the
+ * URL, so every figure, chart and list on the page follows it.
+ */
+export function PeriodControl({ range, fallback }: { range: Range; fallback: RangeKey }) {
+  const { update } = useUrlState();
+  const choose = (next: Range) => update({ ...rangeParams(next, fallback), page: null });
+  const options: SegmentedOption<Choice>[] = PRESETS.map((key) => ({
+    value: key,
+    label: `${PRESET_DAYS[key]} days`,
+  }));
+  if (fallback === "all") options.push({ value: "all", label: "All time" });
+
+  // `contents`: the period and Custom wrap with the header's other buttons, not as one block.
+  return (
+    <div className="contents">
+      <Segmented
+        label="Period"
+        showLabel
+        options={options}
+        value={range.key === "custom" ? null : range.key}
+        onChange={(key) => choose({ key, from: null, to: null })}
+      />
+      <CustomRange range={range} onApply={(from, to) => choose({ key: "custom", from, to })} />
+    </div>
+  );
+}
+
+/** The old name. */
+export const DateRangePicker = PeriodControl;

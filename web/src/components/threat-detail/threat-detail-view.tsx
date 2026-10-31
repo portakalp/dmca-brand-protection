@@ -3,64 +3,54 @@
 import { ChevronRight, Download } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import type { ReactNode } from "react";
 
-import { Pill } from "@/components/pill";
-import { BrandPicker } from "@/components/shell/brand-picker";
-import { Notifications } from "@/components/shell/notifications";
 import { usePanel } from "@/components/shell/panel";
-import { UserMenu } from "@/components/shell/user-menu";
-import { Card, ErrorState } from "@/components/states";
-import { StatusBadge } from "@/components/status-badge";
+import { Card, ErrorState, LoadingState } from "@/components/states";
+import { Status } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { accessOf } from "@/lib/access";
 import type { Schemas } from "@/lib/api/client";
 import { useThreat } from "@/lib/api/queries";
 import { categoryLabel } from "@/lib/format";
-import { fullMoment, sourceLabel } from "@/lib/threat-detail";
+import { clock, dayTime, fullMoment, sameDay, siteCheck, sourceFact } from "@/lib/threat-detail";
 import { sharedQuery } from "@/lib/url";
 
 import { AiReviewCard, EvidenceCard, InfrastructureCard, NoticesCard, TimelineCard } from "./cards";
 import { Comparison } from "./comparison";
 import { MarkOurs } from "./mark-ours";
+import { TakedownProgress } from "./progress";
 
-function TopBar({ domain }: { domain: string | null }) {
+function Breadcrumb({ number }: { number: string | null }) {
   const params = useSearchParams();
-  const query = sharedQuery(params);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-      <nav aria-label="Breadcrumb" className="min-w-0">
-        <ol className="m-0 flex list-none flex-wrap items-center gap-1 p-0 text-[13.5px]">
-          {[
-            { href: `/overview${query}`, label: "Overview" },
-            { href: `/threats${query}`, label: "Threats" },
-          ].map((crumb) => (
-            <li key={crumb.label} className="flex items-center gap-1">
-              <Link
-                href={crumb.href}
-                className="inline-flex min-h-8 items-center px-1 font-medium text-text-secondary no-underline hover:text-text"
-              >
-                {crumb.label}
-              </Link>
-              <ChevronRight aria-hidden="true" className="size-3.5 text-[var(--status-watching)]" />
-            </li>
-          ))}
-          <li className="flex min-w-0 items-center">
-            <span
-              aria-current="page"
-              className="truncate px-1 font-mono text-[12.5px] font-medium text-text"
-            >
-              {domain ?? "Threat"}
-            </span>
-          </li>
-        </ol>
-      </nav>
-      <div className="flex flex-wrap items-center gap-2">
-        <BrandPicker />
-        <Notifications />
-        <UserMenu />
-      </div>
-    </div>
+    <nav aria-label="Breadcrumb">
+      <ol className="m-0 flex list-none flex-wrap items-center gap-2 p-0 text-[13px] text-text-3">
+        <li className="flex items-center gap-2">
+          <Link
+            href={`/threats${sharedQuery(params)}`}
+            className="text-text-2 no-underline hover:text-text hover:underline"
+          >
+            Threats
+          </Link>
+          <ChevronRight aria-hidden="true" strokeWidth={1.5} className="size-3.5" />
+        </li>
+        <li>
+          <span aria-current="page" className="font-mono text-[12.5px]">
+            {number ?? "Threat"}
+          </span>
+        </li>
+      </ol>
+    </nav>
+  );
+}
+
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <span>
+      <span className="text-text-3">{label}</span> {children}
+    </span>
   );
 }
 
@@ -68,42 +58,66 @@ function Header({ detail }: { detail: Schemas["ThreatDetail"] }) {
   const { me, timeZone } = usePanel();
   const access = accessOf(me);
   const threat = detail.threat;
-  const source = sourceLabel(detail.source);
+  const source = sourceFact(detail.source);
+  const check = siteCheck(detail);
+  const now = new Date().toISOString();
+  const at = (moment: string) =>
+    sameDay([moment, now], timeZone) ? clock(moment, timeZone) : dayTime(moment, timeZone);
+  const help =
+    access.markOurs === "disabled"
+      ? me.customer.is_demo
+        ? "Changes are turned off in this demo workspace."
+        : "Changes are turned off while this account is read-only."
+      : access.markOurs === "enabled"
+        ? "Only workspace owners can mark a domain as yours."
+        : null;
+
   return (
-    <header className="flex flex-wrap items-end justify-between gap-4">
-      <div className="flex min-w-0 flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h1 className="font-mono text-[24px] leading-[30px] font-semibold tracking-[-0.02em] [overflow-wrap:anywhere]">
-            {threat.domain}
-          </h1>
-          <StatusBadge status={threat.status} className="pr-2.5 pl-2 text-[12.5px]" />
-          <Pill className="px-2.5 text-[12.5px]">{categoryLabel(threat.category)}</Pill>
-        </div>
-        <p className="text-[13px] text-text-tertiary">
-          First seen {fullMoment(threat.first_seen_at, timeZone)}
-          {source ? ` · ${source}` : null}
-          {detail.official_domain ? (
-            <>
-              {" · Impersonates "}
-              <span className="font-mono text-[12.5px] text-text-strong">
-                {detail.official_domain}
-              </span>
-            </>
-          ) : null}
+    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+      <div className="min-w-0">
+        <p className="mb-1.5 flex flex-wrap gap-2 text-[13.5px] text-text-2">
+          <span className="font-mono">{threat.number}</span>
+          <span aria-hidden="true">·</span>
+          <span>{categoryLabel(threat.category)}</span>
         </p>
+        <h1 className="font-mono text-[28px] font-semibold tracking-[-0.01em] [overflow-wrap:anywhere] max-sm:text-[22px]">
+          {threat.domain}
+        </h1>
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-[22px] gap-y-1.5 text-[13.5px] text-text-2">
+          <Status status={threat.status} />
+          <Fact label="First seen">{fullMoment(threat.first_seen_at, timeZone)}</Fact>
+          {check?.lastAt ? (
+            <Fact label="Last checked">
+              {at(check.lastAt)}, {check.online ? "still online" : "offline"}
+            </Fact>
+          ) : null}
+          {source ? <Fact label={source.label}>{source.value}</Fact> : null}
+          {detail.official_domain ? (
+            <Fact label="Imitates">
+              <span className="font-mono text-text">{detail.official_domain}</span>
+            </Fact>
+          ) : null}
+        </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <MarkOurs detail={detail} mode={access.markOurs} />
-        <Button asChild size="control" className="min-h-10 pr-3.5 pl-3 font-semibold">
-          <a
-            href={detail.evidence_zip_url}
-            download
-            className="text-primary-foreground no-underline hover:text-primary-foreground hover:no-underline"
-          >
-            <Download aria-hidden="true" />
-            Download evidence
-          </a>
-        </Button>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap gap-2">
+          <MarkOurs detail={detail} mode={access.markOurs} helpId="mark-ours-help" />
+          <Button asChild>
+            <a
+              href={detail.evidence_zip_url}
+              download
+              className="text-on-accent hover:text-on-accent"
+            >
+              <Download aria-hidden="true" />
+              Download evidence
+            </a>
+          </Button>
+        </div>
+        {help ? (
+          <p id="mark-ours-help" className="text-[12px] text-text-3">
+            {help}
+          </p>
+        ) : null}
       </div>
     </header>
   );
@@ -112,12 +126,13 @@ function Header({ detail }: { detail: Schemas["ThreatDetail"] }) {
 function Loading() {
   return (
     <div aria-busy="true" aria-label="Loading threat" className="flex flex-col gap-5">
-      <Skeleton className="h-16 rounded-card" />
-      <Skeleton className="h-[420px] rounded-card" />
-      <div className="flex flex-wrap gap-4">
-        <Skeleton className="h-72 flex-[3_1_420px] rounded-card" />
-        <Skeleton className="h-72 flex-[2_1_340px] rounded-card" />
-      </div>
+      <Skeleton className="h-24" />
+      <Card>
+        <LoadingState rows={3} />
+      </Card>
+      <Card>
+        <LoadingState rows={6} />
+      </Card>
     </div>
   );
 }
@@ -126,7 +141,7 @@ export function ThreatDetailView({ id }: { id: string }) {
   const threat = useThreat(id);
   return (
     <>
-      <TopBar domain={threat.data?.threat.domain ?? null} />
+      <Breadcrumb number={threat.data?.threat.number ?? null} />
       {threat.isPending ? (
         <Loading />
       ) : threat.isError ? (
@@ -136,17 +151,18 @@ export function ThreatDetailView({ id }: { id: string }) {
       ) : (
         <>
           <Header detail={threat.data} />
+          <TakedownProgress detail={threat.data} />
           <Comparison detail={threat.data} />
-          <div className="flex flex-wrap items-stretch gap-4">
+          <div className="grid grid-cols-1 items-stretch gap-5 min-[1181px]:grid-cols-2">
             <AiReviewCard detail={threat.data} />
-            <InfrastructureCard detail={threat.data} />
-          </div>
-          <div className="flex flex-wrap items-stretch gap-4">
-            <TimelineCard detail={threat.data} />
-            <div className="flex min-w-0 flex-[2_1_340px] flex-col gap-4">
+            <div className="flex min-w-0 flex-col gap-5">
+              <InfrastructureCard detail={threat.data} />
               <NoticesCard detail={threat.data} />
-              <EvidenceCard detail={threat.data} />
             </div>
+          </div>
+          <div className="grid grid-cols-1 items-stretch gap-5 min-[1181px]:grid-cols-2">
+            <TimelineCard detail={threat.data} />
+            <EvidenceCard detail={threat.data} />
           </div>
         </>
       )}

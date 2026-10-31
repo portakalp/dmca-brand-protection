@@ -19,28 +19,28 @@ test("the overview shows the design's numbers and follows the date range", async
   await expect(page.getByRole("link", { name: /Threats/ }).first()).toContainText("8");
   const status = page.getByRole("region", { name: "Threat status" });
   await expect(status).toContainText("All 128 detections in this period");
-  await expect(status).not.toContainText("Reviewing");
+  await expect(status).not.toContainText("In review");
   const channels = page.getByRole("region", { name: "Takedowns by channel" });
   await expect(channels).toContainText("Cloudflare");
   await expect(channels).toContainText("17");
   await page.screenshot({ path: "test-results/overview-1440.png", fullPage: true });
   await expectAccessible(page);
 
-  // The chart's 7 days narrows every number to the last week.
-  await page
-    .getByRole("group", { name: "Chart period" })
-    .getByRole("button", { name: "7 days" })
-    .click();
+  // The header's one Period control narrows every number to the last week.
+  const period = page.getByRole("group", { name: "Period" });
+  await period.getByRole("button", { name: "7 days" }).click();
   await expect(page).toHaveURL(/range=7d/);
-  await expect(page.getByRole("button", { name: "Date range: Last 7 days" })).toBeVisible();
+  await expect(period.getByRole("button", { name: "7 days" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await expect(kpi(page, "Detected").getByText("128", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Threat status" })).not.toContainText(
     "All 128 detections",
   );
 
-  // Back to 30 days from the header's date range.
-  await page.getByRole("button", { name: "Date range: Last 7 days" }).click();
-  await page.getByRole("button", { name: "Last 30 days" }).click();
+  // Back to 30 days.
+  await period.getByRole("button", { name: "30 days" }).click();
   await expect(kpi(page, "Detected").getByText("128", { exact: true })).toBeVisible();
 });
 

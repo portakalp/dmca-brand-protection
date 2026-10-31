@@ -1383,7 +1383,7 @@ This log records the design decisions behind Kalkan, one entry per decision, in 
   - **Data and forms:** TanStack Query and Table, openapi-fetch and openapi-typescript, Recharts, react-hook-form and zod.
   - **Tests:** Vitest and Playwright.
   - **Pins:** all versions are pinned. TypeScript stays on 5.9 and ESLint on 9 until typescript-eslint and the React ESLint plugin support the next majors.
-  - **Assets:** fonts come from the `geist` package, not Google Fonts at build time. The TOTP QR code is drawn in the client.
+  - **Assets:** fonts come from the `geist` package, not Google Fonts at build time (superseded by K188). The TOTP QR code is drawn in the client.
 - **Why:** A current, consistent stack. The image build does not depend on external networks, and the TOTP secret never goes to a QR service.
 - **Alternatives:** The newest TypeScript and ESLint; `next/font/google`; server-side QR codes.
 
@@ -1685,3 +1685,9 @@ This log records the design decisions behind Kalkan, one entry per decision, in 
 - **Decision:** The Google Cloud and Cloudflare setup (`infra/terraform`, `infra/cloudflare`, `infra/compose/docker-compose.vm.yml`, `infra/compose/vm/`, `infra/vm/`) is kept as an optional reference deployment, with placeholders (`my-gcp-project`, `example.com`) instead of real ids. The repository ships no deploy workflow: `infra/terraform/README.md` lists the steps, and K76's WIF condition still trusts exactly one workflow file for anyone who adds one. CI checks the reference files (`terraform validate`, TFLint, compose `config`, shellcheck, promtool) without any cloud credentials.
 - **Why:** The reference shows how the system runs at production scale (Cloud Run, Cloud SQL, one VM with firewall rules, an edge Worker), but a deploy workflow cannot run without someone's cloud account and would only fail in a fork. The self-hosted setup (K180 to K186) is the supported way to run Kalkan.
 - **Alternatives:** Removing the cloud files (losing the hardened reference); keeping a deploy workflow that cannot run.
+
+### K188 · Panel redesign: Red Hat type and "Plain sight" tokens
+
+- **Decision:** The customer panel and the monthly report use Red Hat Display, Red Hat Text and Red Hat Mono through `next/font/google`; the `geist` package is removed. `next/font` downloads the files once at build time and serves them from the panel's own origin, so browsers never call Google. The visual system is "Plain sight" (architecture.md §18): cool slate neutrals, one navy accent kept apart from the reserved status inks, an icon plus a word for every status, one panel style without shadows, no gradients and no fill under chart lines. `html` sets `text-rendering: geometricPrecision`, because Chromium on Linux (and so the PDF printer) rounds Red Hat Text's word spaces away at 10 to 13 px with hinting on.
+- **Why:** Customers found the old panel generic and hard to read. A bank security manager should see what every section and number means without knowing our terms. The Red Hat superfamily gives headings, body and code faces with shared proportions.
+- **Alternatives:** Keeping `geist` (fully offline builds, but the generic look); bundling the font files in the repository or from `@fontsource` packages (offline builds, more files to keep current).
