@@ -52,7 +52,7 @@ services:
       start_period: 20s
 
   redis:
-    image: redis:7.4.11-bookworm
+    image: redis:7.4.12-bookworm
     # Redis only carries jobs; state lives in Postgres (architecture.md §2).
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     ports:

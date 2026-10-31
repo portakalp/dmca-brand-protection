@@ -71,7 +71,7 @@ services:
     logging: *logging
 
   redis:
-    image: redis:7.4.11-bookworm
+    image: redis:7.4.12-bookworm
     # Redis only carries jobs; state lives in Postgres (architecture.md §2). Writes fail instead of
     # the container being killed when the memory cap is reached. Users come from the ACL file that
     # vm/bin/load-secrets.sh renders (hashes only): default off, kalkan for the application
