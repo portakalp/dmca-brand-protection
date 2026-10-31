@@ -5,7 +5,7 @@
 
 FROM ghcr.io/astral-sh/uv:0.12.24 AS uv
 
-FROM python:3.12.15-slim-trixie AS builder
+FROM python:3.12.16-slim-trixie AS builder
 COPY --from=uv /uv /uvx /bin/
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -18,7 +18,7 @@ COPY backend/src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-default-groups --no-editable
 
-FROM python:3.12.15-slim-trixie AS runtime
+FROM python:3.12.16-slim-trixie AS runtime
 # /artifacts-tmp: the mount point of the artifacts-tmp volume shared with worker-browser (§10).
 # /data/objects: STORAGE_ROOT of STORAGE_BACKEND=filesystem (deploy/selfhost); a fresh named
 # volume takes this owner, so every service of this image can write the objects it shares.
