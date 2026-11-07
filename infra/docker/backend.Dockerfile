@@ -3,7 +3,7 @@
 # runs it with a different command (architecture.md §3). Build context: repository root.
 # Without the dev and browser dependency groups: Playwright lives in the browser image only.
 
-FROM ghcr.io/astral-sh/uv:0.12.24 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.7 AS uv
 
 FROM python:3.12.15-slim-trixie AS builder
 COPY --from=uv /uv /uvx /bin/

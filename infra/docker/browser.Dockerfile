@@ -8,7 +8,7 @@
 # locked playwright package must have the same version (v1.63.0); otherwise Playwright cannot find
 # the browsers under /ms-playwright.
 
-FROM ghcr.io/astral-sh/uv:0.12.24 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.7 AS uv
 
 FROM mcr.microsoft.com/playwright/python:v1.63.0-noble AS builder
 COPY --from=uv /uv /uvx /bin/
