@@ -5,12 +5,12 @@
 # panel and the API share one origin as they do behind the edge. Cloud Run and deploy/selfhost
 # build without it: there the edge Worker or Caddy sends /api/* to the api service (§22).
 
-FROM node:24.22.1-trixie-slim AS deps
+FROM node:24.22.2-trixie-slim AS deps
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
-FROM node:24.22.1-trixie-slim AS builder
+FROM node:24.22.2-trixie-slim AS builder
 WORKDIR /web
 ARG API_ORIGIN=
 ENV NEXT_TELEMETRY_DISABLED=1 \
@@ -19,7 +19,7 @@ COPY --from=deps /web/node_modules ./node_modules
 COPY web/ ./
 RUN npm run build
 
-FROM node:24.22.1-trixie-slim AS runtime
+FROM node:24.22.2-trixie-slim AS runtime
 RUN groupadd --system --gid 10001 kalkan \
     && useradd --system --uid 10001 --gid kalkan --home-dir /app --no-create-home \
        --shell /usr/sbin/nologin kalkan
