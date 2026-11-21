@@ -4,17 +4,17 @@ version = "0.1.0"
 description = "Brand protection and phishing takedown automation"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "alembic>=1.20.0",
-    "anthropic>=2.3.0",
+    "alembic>=1.20.1",
+    "anthropic>=2.10.0",
     "apscheduler>=3.11,<4",
     "argon2-cffi>=25.1.0",
     "cryptography>=50.0.2",
-    "dnspython>=2.9.0",
+    "dnspython>=2.9.2",
     "dnstwist>=20250130",
     "dramatiq[redis]>=2.2.1",
-    "fastapi>=0.143.0",
-    "google-cloud-storage>=3.17.0",
-    "httpx2>=2.13.1",
+    "fastapi>=0.164.0",
+    "google-cloud-storage>=3.17.1",
+    "httpx2>=2.16.2",
     "idna>=3.10",
     "imagehash>=4.3.2",
     "jinja2>=3.1.6",
@@ -22,20 +22,20 @@ dependencies = [
     "prometheus-client>=0.26.0",
     "psycopg[binary]>=3.2",
     "pyahocorasick>=2.3.1",
-    "pydantic-settings>=2.15.0",
-    "pyotp>=2.10.0",
-    "python-multipart>=0.0.20",
+    "pydantic-settings>=2.16.3",
+    "pyotp>=2.12.0",
+    "python-multipart>=0.0.34",
     "pyyaml>=6.0.3",
     "rapidfuzz>=3.14.6",
-    "sentry-sdk>=2.71.0",
-    "sqlalchemy>=2.0",
+    "sentry-sdk>=2.75.0",
+    "sqlalchemy>=2.1.9",
     "structlog>=26.1.0",
     "tldextract>=5.4.0",
-    "typer>=0.27.3",
-    "uuid-utils>=1.0.0",
+    "typer>=0.29.2",
+    "uuid-utils>=1.2.0",
     "uvicorn[standard]>=0.54.0",
-    "websockets>=17.2",
-    "whoisit>=4.0.5",
+    "websockets>=17.4",
+    "whoisit>=4.1.0",
 ]
 
 [project.scripts]
@@ -47,11 +47,11 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "mypy>=2.4.0",
-    "pre-commit>=4.6.2",
-    "pytest>=9.1.1",
+    "mypy>=2.4.1",
+    "pre-commit>=4.7.0",
+    "pytest>=9.2.0",
     "responses>=0.26.3",
-    "ruff>=0.16.10",
+    "ruff>=0.17.5",
     "types-pyyaml>=6.0.12.20260906",
 ]
 # The browser stage only (worker-browser image, local tests). The backend image syncs with
